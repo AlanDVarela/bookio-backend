@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CLIENT
+  BUSINESS_OWNER
+}
+
+enum BusinessType {
+  BARBERSHOP
+  SPA
+  SALON
+  OTHER
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  role          Role     @default(CLIENT)
+  name          String
+  email         String   @unique
+  password_hash String?
+  avatar_url    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  businesses   Business[] // For BUSINESS_OWNER
+  appointments Appointment[] // For CLIENT
+  reviews      Review[] // For CLIENT
+}
+
+model Business {
+  id       String       @id @default(uuid())
+  owner_id String
+  name     String
+  type     BusinessType
+  address  String
+  logo_url String?
+  photos   String[]     @default([]) // Postgres array for multiple images
+
+  latitude       Float?
+  longitude      Float?
+  average_rating Float  @default(0.0)
+  review_count   Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner        User          @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  services     Service[]
+  schedules    Schedule[]
+  appointments Appointment[]
+  reviews      Review[]
+}
+
+model Service {
+  id               String   @id @default(uuid())
+  business_id      String
+  name             String
+  duration_minutes Int
+  price            Decimal  @db.Decimal(10, 2)
+  photo_url        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  business     Business      @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+}
+
+model Schedule {
+  id          String   @id @default(uuid())
+  business_id String
+  day_of_week Int // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  start_time  String // HH:mm format, e.g. "09:00"
+  end_time    String // HH:mm format, e.g. "18:00"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@unique([business_id, day_of_week])
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  business_id    String
+  client_id      String
+  service_id     String
+  start_datetime DateTime
+  end_datetime   DateTime
+  status         AppointmentStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  client   User     @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  service  Service  @relation(fields: [service_id], references: [id], onDelete: Cascade)
+  review   Review?
+}
+
+model Review {
+  id      String  @id @default(uuid())
+  score   Int // 1-5 rating
+  comment String?
+
+  appointment_id String @unique
+  business_id    String
+  client_id      String
+
+  createdAt DateTime @default(now())
+
+  appointment Appointment @relation(fields: [appointment_id], references: [id], onDelete: Cascade)
+  business    Business    @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  client      User        @relation(fields: [client_id], references: [id], onDelete: Cascade)
+}
