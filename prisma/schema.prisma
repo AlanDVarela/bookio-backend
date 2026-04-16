@@ -25,18 +25,18 @@ enum AppointmentStatus {
 }
 
 model User {
-  id            String   @id @default(uuid())
-  role          Role     @default(CLIENT)
-  name          String
-  email         String   @unique
-  password_hash String?
-  avatar_url    String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id         String   @id // Firebase UID
+  role       Role     @default(CLIENT)
+  name       String
+  email      String   @unique
+  phone      String?
+  avatar_url String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  businesses   Business[] // For BUSINESS_OWNER
-  appointments Appointment[] // For CLIENT
-  reviews      Review[] // For CLIENT
+  businesses   Business[]
+  appointments Appointment[]
+  reviews      Review[]
 }
 
 model Business {
