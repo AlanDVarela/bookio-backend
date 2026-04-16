@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import authRoutes from './auth/auth.routes';
 import usersRoutes from './users/users.routes';
 import businessesRoutes from './businesses/businesses.routes';
 import appointmentsRoutes from './appointments/appointments.routes';
@@ -8,6 +9,7 @@ import reviewsRoutes from './reviews/reviews.routes';
 
 const router = Router();
 
+router.use('/auth', authRoutes);
 router.use('/users', usersRoutes);
 router.use('/businesses', businessesRoutes);
 router.use('/appointments', appointmentsRoutes);
