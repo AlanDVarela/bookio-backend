@@ -1,6 +1,8 @@
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { env } from '../../config/env.config';
 
+//Publicar eventos a SNS
+
 const client = new SNSClient({ region: env.AWS_REGION });
 
 export async function publishEvent(subject: string, message: any): Promise<void> {

@@ -1,9 +1,9 @@
 import multer from 'multer';
 
-// Memory storage to keep buffer in memory and send it to S3 directly
+//Middleware para aceptar solo imagenes de < 5 mb y las guarda en memoria como buffer
+
 const storage = multer.memoryStorage();
 
-// Only accept common image files
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);

@@ -91,21 +91,109 @@ El desarrollo se centra en 3 flujos principales enumerados:
    cd bookio-backend
    ```
 2. Instala las dependencias:
+   ```bash
+   npm install
+   ```
 
-```bash
-npm install
+3. Variables de entorno:
+   Crea un archivo `.env` basándote en el archivo `.env.example`. Asegúrate de colocar las llaves correctas de Firebase (`FIREBASE_PRIVATE_KEY`, etc.)
+
+4. Levanta la Base de Datos Local con Docker:
+   ```bash
+   docker-compose up -d
+   ```
+
+5. Sincroniza el esquema de base de datos y llénala de datos base (Seed):
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   npx prisma db seed
+   ```
+
+6. Inicia el servidor de desarrollo:
+   ```bash
+   npm run dev
+   ```
+
+### 📁 Estructura del Proyecto
+
+```text
+bookio-backend/
+├── docker-compose.yml       # Base de Datos Local
+├── .env.example             # Ejemplo de variables de entorno
+├── api.http                 # Archivo de pruebas rápidas REST (Usar con VSCode REST Client)
+├── prisma.config.ts         # Configuración del CLI de Prisma
+├── prisma/
+│   ├── schema.prisma        # Modelo de Base de Datos
+│   └── seed.ts              # Script para poblar la DB inicial
+└── src/
+    ├── app/
+    │   ├── appointments/    # Lógica de Reservaciones
+    │   ├── auth/            # Rutas y validaciones de Firebase
+    │   ├── businesses/      # Puntos de entrada para el local / negocio
+    │   ├── favorites/       # Gestión de favoritos del cliente
+    │   ├── middlewares/     # Jwt, RequireRole, S3, SNS, SecretManager
+    │   ├── reviews/         # Opiniones de citas pasadas
+    │   ├── schedules/       # Horarios laborables
+    │   ├── services/        # Catálogo de servicios por negocio
+    │   └── users/           # Perfil y metadatos de usuario
+    ├── config/              # Inyección de environment (.env)
+    ├── database/            # Conexión Adapter Pg de Prisma
+    └── index.ts             # Entry point (Express)
 ```
-3. Configura las variables de entorno:
 
-Crea un archivo .env en la raíz del proyecto basándote en .env.example.
+---
 
-4. Inicializa Prisma y sincroniza la base de datos:
+## 📡 API Reference (`/api/v1`)
 
-```bash
-npx prisma generate
-npx prisma db push
-```
-5. Levanta el servidor en modo desarrollo:
-```bash
-npm run dev
-```
+A continuación se listan los endpoints principales agrupados por dominio. Todos los endpoints que requieren autenticación esperan un `Bearer Token` de Firebase válido en los headers.
+
+### 🔐 Autenticación (`/auth`)
+| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+|---|---|---|---|---|
+| POST | `/auth/login` | Login inicial en backend | `{}` | `Auth: Bearer` |
+| POST | `/auth/register/client` | Registra a un nuevo usuario como `CLIENT` | `{ name, phone }` | `Auth: Bearer` |
+| POST | `/auth/register/business` | Registra a un nuevo usuario como `BUSINESS_OWNER` | `{ name, phone }` | `Auth: Bearer` |
+| GET | `/auth/me` | Devuelve el perfil completo del usuario autenticado | N/A | `Auth: Bearer` |
+
+### 🏢 Negocios (`/businesses`)
+| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+|---|---|---|---|---|
+| GET | `/businesses` | Obtiene el directorio de negocios | `?page, limit` | Público |
+| GET | `/businesses/recommended` | Obtiene top 5 de negocios mejor evaluados | N/A | Público |
+| GET | `/businesses/:id` | Detalle público del negocio | N/A | Público |
+| GET | `/businesses/:id/services` | Lista los servicios ofrecidos por un negocio | N/A | Público |
+| GET | `/businesses/metrics` | Obtiene los KPIs de rendimiento del negocio | N/A | `Auth: Bearer` (Owner) |
+| GET | `/businesses/reservations` | Obtiene lista de reservas filtrada opcionalmente por fecha | `?date=YYYY-MM-DD` | `Auth: Bearer` (Owner) |
+
+### 📅 Citas (`/appointments`)
+| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+|---|---|---|---|---|
+| GET | `/appointments` | Obtiene citas. Permite filtrar por estado temporal | `?status=upcoming/past/cancelled` | `Auth: Bearer` |
+| GET | `/appointments/slots` | Obtiene slots disponibles para realizar una reserva | `?businessId, date` | Público / Auth |
+| POST | `/appointments` | Reserva una nueva cita | `{ businessId, serviceId, startDatetime... }` | `Auth: Bearer` (Client) |
+| PUT | `/appointments/:id/status` | Cambia el estado (CONFIRMED/CANCELLED) | `{ status }` | `Auth: Bearer` |
+
+### ⭐ Favoritos & Reseñas (`/favorites`, `/reviews`)
+| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+|---|---|---|---|---|
+| GET | `/favorites` | Obtiene lista de negocios favoritos del usuario | N/A | `Auth: Bearer` (Client) |
+| POST | `/favorites` | Guarda un negocio en favoritos | `{ businessId }` | `Auth: Bearer` (Client) |
+| DELETE| `/favorites/:id` | Remueve de favoritos | N/A | `Auth: Bearer` (Client) |
+| POST | `/reviews` | Sube una evaluación pos-cita | `{ score, comment, appointment_id }`| `Auth: Bearer` (Client) |
+| GET | `/reviews/business/:id` | Obtiene todas las revisiones publicadas de un negocio | N/A | Público |
+
+---
+
+## 🛠️ Middlewares Customizados
+
+El proyecto cuenta con un set de middlewares especializados para inyectar lógica de negocio, separar responsabilidades (Separation of Concerns) y mantener los Endpoints limpios:
+
+| Middleware / Servicio | Archivo | Descripción de Responsabilidad |
+|---|---|---|
+| **Verificador de Firebase** | `auth.middleware.ts: authenticateJWT` | Intercepta el request, lee el header `Authorization`, y con `firebase-admin` valida criptográficamente el token (JWT). Inyecta la data segura decodificada en `req.user`. |
+| **Control de Accesos (RBAC)** | `auth.middleware.ts: requireRole` | Actúa junto al verificador. Lee los roles de base de datos extraídos en `req.user` y bloquea u otorga acceso a clientes, dueños de negocios o admins. |
+| **Parser Multipart FormData** | `upload.middleware.ts: upload` | Configuración base en memoria (via Multer) para parsear correctamente *uploads* sin ensuciar los controladores. Permite transferencias directas. |
+| **AWS S3 Object Uploader** | `s3.service.ts` | Recibe Buffers desde el middleware multipart y mediante el AWS SDK v3 los sube asíncronamente al respectivo Bucket privado/público. Retorna URIs seguras. |
+| **AWS SNS Event Dispatcher** | `sns.service.ts` | Servicio global de notificaciones. Emplea Tópicos (Topics) de Amazon Simple Notification Service para disparar triggers a dispositivos móviles o endpoints paralelos de manera no bloqueante. |
+| **AWS Secrets Resolver** | `secretManager.service.ts` | Encripta peticiones en runtime que requieren claves API muy sensibles delegando la búsqueda a las bóvedas blindadas de Cloud en lugar de almacenarlas localmente. |

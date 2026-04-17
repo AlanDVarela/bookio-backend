@@ -6,15 +6,15 @@ El frontend espera estos endpoints que el backend **no tiene**:
 
 | Endpoint | Frontend espera | Backend tiene |
 |---|---|---|
-| `POST /api/v1/auth/login` | Login con email/password | ❌ No existe |
-| `POST /api/v1/auth/register/client` | Registro de cliente | ❌ No existe |
-| `POST /api/v1/auth/register/business` | Registro de negocio | ❌ No existe |
-| `GET /api/v1/businesses/recommended` | Negocios recomendados | ❌ No existe |
-| `GET /api/v1/appointments` (filtro `status`) | upcoming/past/cancelled | ⚠️ Existe pero no filtra por status |
-| `GET /api/v1/business/metrics` | KPIs del negocio | ❌ No existe |
-| `GET /api/v1/business/reservations` (por fecha) | Reservaciones por día | ⚠️ El endpoint general existe pero no tiene este filtro |
-| `GET /api/v1/favorites` | Favoritos del usuario | ❌ No existe (ni el modelo) |
-| `DELETE /api/v1/favorites/:id` | Quitar favorito | ❌ No existe |
+| `POST /api/v1/auth/login` | Login con email/password | ✅ Completado (Mock local para frontend) |
+| `POST /api/v1/auth/register/client` | Registro de cliente | ✅ Completado (Redirecciona a Auth Service) |
+| `POST /api/v1/auth/register/business` | Registro de negocio | ✅ Completado (Redirecciona a Auth Service) |
+| `GET /api/v1/businesses/recommended` | Negocios recomendados | ✅ Completado |
+| `GET /api/v1/appointments` (filtro `status`) | upcoming/past/cancelled | ✅ Completado (Lógica temporal aplicada) |
+| `GET /api/v1/business/metrics` | KPIs del negocio | ✅ Completado (Mock de respuesta) |
+| `GET /api/v1/business/reservations` (por fecha) | Reservaciones por día | ✅ Completado (Filtro por fecha en dashboard) |
+| `GET /api/v1/favorites` | Favoritos del usuario | ✅ Completado (Endpoints tipo Mock) |
+| `DELETE /api/v1/favorites/:id` | Quitar favorito | ✅ Completado (Endpoints tipo Mock) |
 
 ---
 
@@ -22,7 +22,7 @@ El frontend espera estos endpoints que el backend **no tiene**:
 
 ### 1. Autenticación mock — debe eliminarse y reemplazarse
 
-El middleware actual tiene bypass tokens hardcodeados (`mock-owner-token`, `mock-client-token`) y un comentario que dice "in a real app use JWT". Sin auth real no hay login ni registro funcional.
+El middleware actual ya usa `authenticateJWT` pero para pruebas se ha dejado el mock en el endpoint `/login`. Firebase se encarga de la generación de JWT válida.
 
 ### 2. Rutas de usuarios incompletas
 
@@ -56,8 +56,8 @@ El middleware actual tiene bypass tokens hardcodeados (`mock-owner-token`, `mock
 
 ## Lo que falta en el modelo de datos
 
-1. **`Favorite` model** — el frontend tiene toda una sección de favoritos; el backend no tiene ni modelo ni tabla
-2. **`phone` en User** — el formulario de registro de negocio pide teléfono, no hay campo en el modelo
+1. **`Favorite` model** — el frontend tiene toda una sección de favoritos; el backend ya tiene los controllers y rutas mockeadas pero **falta agregar el modelo en prisma**.
+2. **`phone` en User** — ✅ Ya agregado en Prisma y en el Auth Service.
 3. **`tags` en Business** — el dashboard filtra y muestra tags
 4. **`category` en Business** — subcategoría (ej: "massage" dentro de "spa")
 5. **`notes`/`partySize` en Appointment** — datos que el negocio necesita ver en sus reservaciones
@@ -100,10 +100,10 @@ Funcionalidades completas en el backend que el frontend todavía no conecta (per
 | 🔴 Crítico | Implementar auth real: login, register, JWT válido |
 | 🔴 Crítico | Alinear `BusinessType` entre frontend y backend |
 | 🔴 Crítico | Serializar respuestas en camelCase |
-| 🟠 Alto | Crear modelo y endpoints de `Favorites` |
-| 🟠 Alto | Agregar `category`, `tags`, `phone` al modelo |
-| 🟠 Alto | Endpoint de métricas del negocio |
-| 🟠 Alto | Filtro por `status` temporal en appointments |
-| 🟡 Medio | `GET /businesses/recommended` |
+| 🟠 Alto | Crear modelo y endpoints de `Favorites` (Endpoints de Mock creados) |
+| 🟠 Alto | Agregar `category`, `tags` al modelo |
+| 🟠 Alto | Endpoint de métricas del negocio (Mock creado) |
+| 🟠 Alto | Filtro por `status` temporal en appointments (✅ Listo) |
+| 🟡 Medio | `GET /businesses/recommended` (✅ Listo) |
 | 🟡 Medio | Agregar `notes`, `partySize` a Appointment |
 | 🟡 Medio | Campo `isOpen` calculado desde schedules |

@@ -6,10 +6,17 @@ import { uploadSettings } from '../middlewares/upload.middleware';
 const router = Router();
 const businessesController = new BusinessesController();
 
+
+//Rutas publicas
+router.get('/recommended', businessesController.getRecommended);
 router.get('/', businessesController.getAll);
 router.get('/:id', businessesController.getById);
+router.get('/:id/services', businessesController.getBusinessServices);
 
 
+//Rutas privadas Business_Owner
+router.get('/metrics', authenticateJWT, requireRole('BUSINESS_OWNER'), businessesController.getMetrics);
+router.get('/reservations', authenticateJWT, requireRole('BUSINESS_OWNER'), businessesController.getReservations);
 router.post(
   '/',
   authenticateJWT,

@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { admin } from '../../config/firebase.config';
 import { prisma } from '../../database/prisma';
 
+//Middleware para autenticar JWT y verificar roles
+//Autenticacion por medio de Firebase
+
 export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;

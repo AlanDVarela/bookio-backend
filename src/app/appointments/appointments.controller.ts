@@ -67,11 +67,33 @@ export class AppointmentsController {
   // Obtener todas las citas
   public async getAll(req: Request, res: Response) {
     try {
-      const { businessId, clientId } = req.query;
-      const appointments = await appointmentsService.getAppointmentsByFilter({
-        businessId: businessId as string | undefined,
-        clientId: clientId as string | undefined,
+      const { businessId, clientId, status } = req.query; // status: 'upcoming' | 'past' | 'cancelled'
+      
+      const where: any = {};
+      if (businessId) where.business_id = businessId;
+      if (clientId) where.client_id = clientId;
+
+      const now = new Date();
+      if (status === 'upcoming') {
+        where.start_datetime = { gte: now };
+        where.status = { not: 'CANCELLED' };
+      } else if (status === 'past') {
+        where.start_datetime = { lt: now };
+        where.status = { not: 'CANCELLED' };
+      } else if (status === 'cancelled') {
+        where.status = 'CANCELLED';
+      }
+
+      const appointments = await prisma.appointment.findMany({
+        where,
+        orderBy: { start_datetime: 'asc' },
+        include: {
+          client: true,
+          service: true,
+          business: true,
+        }
       });
+
       res.status(200).json({ appointments });
     } catch (error) {
       console.error(error);
