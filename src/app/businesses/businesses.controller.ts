@@ -58,6 +58,77 @@ export class BusinessesController {
     }
   }
 
+  // Frontend: GET /businesses/recommended
+  public async getRecommended(req: Request, res: Response) {
+    try {
+      // Mocked up logic: return the top 5 businesses by rating
+      const payload = await businessesService.getAllBusinesses({ limit: 5 });
+      res.status(200).json(payload);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  // Frontend: GET /business/metrics
+  public async getMetrics(req: AuthenticatedRequest, res: Response) {
+    try {
+      const ownerId = req.user?.id;
+      // In a real scenario we use prisma aggregation queries
+      res.status(200).json({
+        metrics: {
+          todayAppointments: 0,
+          weekAppointments: 0,
+          monthRevenue: 0,
+          occupancyRate: 0
+        }
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  // Frontend: GET /business/reservations (por fecha)
+  public async getReservations(req: AuthenticatedRequest, res: Response) {
+    try {
+      const ownerId = req.user?.id;
+      const { date } = req.query; // Expecting date string 
+      const { prisma } = require('../../database/prisma');
+      const business = await prisma.business.findFirst({ where: { owner_id: ownerId } });
+
+      if (!business) {
+        return res.status(404).json({ error: 'Business not found' });
+      }
+
+      let dateFilter = {};
+      if (date) {
+        const startOfDay = new Date(date as string);
+        const endOfDay = new Date(date as string);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+        dateFilter = {
+          start_datetime: {
+            gte: startOfDay,
+            lt: endOfDay
+          }
+        };
+      }
+
+      const reservations = await prisma.appointment.findMany({
+        where: {
+          business_id: business.id,
+          ...dateFilter
+        },
+        include: { client: true, service: true }
+      });
+
+      res.status(200).json({ reservations });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
   public async getById(req: Request, res: Response) {
     try {
       const id = req.params.id as string;
@@ -68,6 +139,18 @@ export class BusinessesController {
       }
 
       res.status(200).json({ business });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  public async getBusinessServices(req: Request, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const { prisma } = require('../../database/prisma');
+      const services = await prisma.service.findMany({ where: { business_id: id } });
+      res.status(200).json({ services });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Internal Server Error' });

@@ -24,6 +24,12 @@ export class ServicesService {
     });
   }
 
+  public async getServicesByBusinessId(businessId: string) {
+    return prisma.service.findMany({
+      where: { business_id: businessId },
+    });
+  }
+
   public async getServiceById(serviceId: string) {
     return prisma.service.findUnique({
       where: { id: serviceId },

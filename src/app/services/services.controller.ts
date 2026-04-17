@@ -5,19 +5,53 @@ import { ServicesService } from './services.service';
 
 const servicesService = new ServicesService();
 
+//Servicio y rutas para business
 export class ServicesController {
+  public async getOwnServices(req: AuthenticatedRequest, res: Response) {
+    try {
+      const ownerId = req.user?.id;
+      const business = await prisma.business.findFirst({ where: { owner_id: ownerId } });
+      if (!business) {
+        return res.status(404).json({ error: 'Business not found for this owner' });
+      }
+
+      const services = await servicesService.getServicesByBusinessId(business.id);
+      return res.status(200).json({ services });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  // Cliente (Público): Obtiene los detalles de un servicio específico para poder reservarlo
+  public async getService(req: Request, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const service = await servicesService.getServiceById(id);
+
+      if (!service) {
+        return res.status(404).json({ error: 'Service not found' });
+      }
+
+      return res.status(200).json({ service });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
   public async createService(req: AuthenticatedRequest, res: Response) {
     try {
-      const { businessId, name, durationMinutes, price } = req.body;
+      const { name, durationMinutes, price } = req.body;
       const ownerId = req.user?.id;
 
-      const business = await prisma.business.findUnique({ where: { id: businessId } });
-      if (!business || business.owner_id !== ownerId) {
-        return res.status(403).json({ error: 'Not the owner of this business' });
+      const business = await prisma.business.findFirst({ where: { owner_id: ownerId } });
+      if (!business) {
+        return res.status(404).json({ error: 'Business not found for this owner' });
       }
 
       const service = await servicesService.createService({
-        businessId,
+        businessId: business.id,
         name,
         durationMinutes,
         price,
