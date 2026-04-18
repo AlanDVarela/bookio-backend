@@ -1,6 +1,8 @@
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
 import { env } from '../../config/env.config';
 
+//Obtener secretos de AWS Secrets Manager
+
 const client = new SecretsManagerClient({ region: env.AWS_REGION });
 
 export async function getSecret(secretName: string): Promise<string | null> {
