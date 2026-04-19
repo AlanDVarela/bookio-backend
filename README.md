@@ -119,27 +119,44 @@ El desarrollo se centra en 3 flujos principales enumerados:
 
 ```text
 bookio-backend/
-├── docker-compose.yml       # Base de Datos Local
-├── .env.example             # Ejemplo de variables de entorno
-├── api.http                 # Archivo de pruebas rápidas REST (Usar con VSCode REST Client)
-├── prisma.config.ts         # Configuración del CLI de Prisma
+├── .github/
+│   └── workflows/
+│       ├── ci.yml               # Pipeline CI (Lint + Tests)
+│       └── cd.yml               # Pipeline CD (Build + Deploy)
+├── .husky/
+│   └── pre-commit               # Hook: lint-staged antes de cada commit
+├── docker-compose.yml           # Base de Datos Local
+├── .env.example                 # Ejemplo de variables de entorno
+├── api.http                     # Archivo de pruebas rápidas REST (VSCode REST Client)
+├── eslint.config.mjs            # Configuración de ESLint (TypeScript)
+├── jest.config.ts               # Configuración de Jest para pruebas unitarias
+├── prisma.config.ts             # Configuración del CLI de Prisma
 ├── prisma/
-│   ├── schema.prisma        # Modelo de Base de Datos
-│   └── seed.ts              # Script para poblar la DB inicial
+│   ├── schema.prisma            # Modelo de Base de Datos
+│   └── seed.ts                  # Script para poblar la DB inicial
+├── scripts/
+│   └── deploy.sh                # Script parametrizado de deploy a EC2
+├── tests/
+│   └── unit/                    # Pruebas unitarias por módulo
+│       ├── appointments/
+│       ├── isolation/           # Tests de aislamiento multi-tenant
+│       ├── middlewares/
+│       ├── schedules/
+│       └── services/
 └── src/
     ├── app/
-    │   ├── appointments/    # Lógica de Reservaciones
-    │   ├── auth/            # Rutas y validaciones de Firebase
-    │   ├── businesses/      # Puntos de entrada para el local / negocio
-    │   ├── favorites/       # Gestión de favoritos del cliente
-    │   ├── middlewares/     # Jwt, RequireRole, S3, SNS, SecretManager
-    │   ├── reviews/         # Opiniones de citas pasadas
-    │   ├── schedules/       # Horarios laborables
-    │   ├── services/        # Catálogo de servicios por negocio
-    │   └── users/           # Perfil y metadatos de usuario
-    ├── config/              # Inyección de environment (.env)
-    ├── database/            # Conexión Adapter Pg de Prisma
-    └── index.ts             # Entry point (Express)
+    │   ├── appointments/        # Lógica de Reservaciones
+    │   ├── auth/                # Rutas y validaciones de Firebase
+    │   ├── businesses/          # Puntos de entrada para el local / negocio
+    │   ├── favorites/           # Gestión de favoritos del cliente
+    │   ├── middlewares/         # Jwt, RequireRole, S3, SNS, SecretManager
+    │   ├── reviews/             # Opiniones de citas pasadas
+    │   ├── schedules/           # Horarios laborables
+    │   ├── services/            # Catálogo de servicios por negocio
+    │   └── users/               # Perfil y metadatos de usuario
+    ├── config/                  # Inyección de environment (.env)
+    ├── database/                # Conexión Adapter Pg de Prisma
+    └── index.ts                 # Entry point (Express)
 ```
 
 ---
@@ -183,6 +200,18 @@ A continuación se listan los endpoints principales agrupados por dominio. Todos
 | POST | `/reviews` | Sube una evaluación pos-cita | `{ score, comment, appointment_id }`| `Auth: Bearer` (Client) |
 | GET | `/reviews/business/:id` | Obtiene todas las revisiones publicadas de un negocio | N/A | Público |
 
+### 🛠️ Servicios (`/services`)
+| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+|---|---|---|---|---|
+| GET | `/services` | Obtiene los servicios del negocio del dueño autenticado | N/A | `Auth: Bearer` (Owner) |
+| POST | `/services` | Crea un nuevo servicio para el negocio del dueño | `{ name, durationMinutes, price }` | `Auth: Bearer` (Owner) |
+| PATCH | `/services/:id/photo` | Sube/actualiza la foto de un servicio (multipart `photo`) | `FormData: photo` | `Auth: Bearer` (Owner) |
+
+### 🗓️ Horarios (`/schedules`)
+| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+|---|---|---|---|---|
+| POST | `/schedules` | Crea un horario laboral para un negocio | `{ businessId, dayOfWeek, startTime, endTime }` | `Auth: Bearer` (Owner) |
+
 ---
 
 ## 🛠️ Middlewares Customizados
@@ -197,3 +226,115 @@ El proyecto cuenta con un set de middlewares especializados para inyectar lógic
 | **AWS S3 Object Uploader** | `s3.service.ts` | Recibe Buffers desde el middleware multipart y mediante el AWS SDK v3 los sube asíncronamente al respectivo Bucket privado/público. Retorna URIs seguras. |
 | **AWS SNS Event Dispatcher** | `sns.service.ts` | Servicio global de notificaciones. Emplea Tópicos (Topics) de Amazon Simple Notification Service para disparar triggers a dispositivos móviles o endpoints paralelos de manera no bloqueante. |
 | **AWS Secrets Resolver** | `secretManager.service.ts` | Encripta peticiones en runtime que requieren claves API muy sensibles delegando la búsqueda a las bóvedas blindadas de Cloud en lugar de almacenarlas localmente. |
+
+---
+
+## 🧪 Pruebas Unitarias
+
+El proyecto utiliza **Jest** + **ts-jest** para pruebas unitarias. Los tests se organizan en la carpeta `tests/` reflejando la estructura del código fuente:
+
+```text
+tests/
+└── unit/
+    ├── appointments/
+    │   └── appointments.service.test.ts
+    ├── middlewares/
+    │   └── auth.middleware.test.ts
+    ├── schedules/
+    │   └── schedules.service.test.ts
+    └── services/
+        ├── services.controller.test.ts
+        └── services.service.test.ts
+```
+
+### Ejecutar todas las pruebas
+```bash
+npm test
+```
+
+### Ejecutar con cobertura
+```bash
+npx jest --coverage
+```
+
+### Ejecutar un archivo específico
+```bash
+npx jest tests/unit/services/services.service.test.ts
+```
+
+### Estrategia de Testing
+- **Mocking completo de Prisma:** Cada suite mockea `prisma` para aislar la lógica de negocio de la base de datos.
+- **Mocking de servicios externos:** AWS SNS, Firebase Auth y S3 se mockean para evitar llamadas reales.
+- **Cobertura de edge cases:** Tests para errores de BD, validaciones de rol, conflictos de horario (overbooking) y parámetros faltantes.
+- **Aislamiento Multi-Tenant:** Tests dedicados que validan que las queries filtran correctamente por `business_id`, asegurando que datos de un negocio nunca se filtren hacia otro.
+
+---
+
+## 🔄 Estrategia de CI/CD
+
+Nuestra estrategia de Integración y Despliegue Continuo se basa en automatizar la calidad del código para evitar que errores humanos lleguen a producción.
+
+### Continuous Integration (CI)
+
+El pipeline de CI se activa automáticamente al realizar un **Pull Request (PR)** hacia la rama `main`:
+
+```mermaid
+graph LR
+  A[PR a main] --> B[ESLint<br/>Análisis Estático]
+  B --> C[Jest<br/>Pruebas Unitarias]
+  C --> D[Coverage<br/>Reporte]
+  D --> E{Merge}
+```
+
+| Etapa | Herramienta | Descripción |
+|---|---|---|
+| **Análisis Estático** | ESLint + `typescript-eslint` | Detecta errores de tipado, variables no usadas, `any` explícitos y malas prácticas antes de que lleguen al repo. |
+| **Pre-commit Hooks** | Husky + lint-staged | Ejecuta ESLint automáticamente sobre archivos staged en cada commit local, forzando calidad desde el primer push. |
+| **Pruebas Unitarias** | Jest + ts-jest | Valida lógica de negocio con mocks de Prisma. Incluye tests de **aislamiento multi-tenant** que comprueban que el filtrado por `business_id` funciona correctamente y no mezcla datos entre tenants en RDS. |
+| **Cobertura** | Jest `--coverage` | Genera reporte de cobertura y lo sube como artefacto del pipeline. |
+
+### Continuous Deployment (CD)
+
+Se utilizan **scripts de bash parametrizados** para realizar el despliegue en EC2 mediante SSH:
+
+```bash
+# Uso del script de deploy
+bash scripts/deploy.sh \
+  --host <EC2_IP> \
+  --user ec2-user \
+  --key ~/.ssh/bookio.pem
+```
+
+| Step | Acción |
+|---|---|
+| 1 | `npm run build` — Compilación TypeScript local |
+| 2 | `rsync` — Transferencia de artefactos a EC2 (excluye `node_modules`, `.env`, `tests`) |
+| 3 | `npm ci --omit=dev` — Instalación de dependencias de producción en remoto |
+| 4 | `npx prisma db push` — Sincronización del esquema de BD |
+| 5 | `pm2 restart` — Reinicio de la aplicación sin downtime |
+
+> **Nota:** Actualmente el CD está configurado como *placeholder* (valida build localmente). Cuando la instancia EC2 esté disponible, se activarán los pasos de SSH descomentando la sección correspondiente en `.github/workflows/cd.yml`.
+
+### Archivos del Pipeline
+
+```text
+.github/workflows/
+├── ci.yml          # Pipeline de CI (Lint + Tests) — trigger: PR a main
+└── cd.yml          # Pipeline de CD (Build + Deploy) — trigger: CI exitoso en main
+
+.husky/
+└── pre-commit      # Hook: ejecuta lint-staged antes de cada commit
+
+scripts/
+└── deploy.sh       # Script parametrizado de despliegue SSH a EC2
+```
+
+### Secrets Requeridos (GitHub Actions)
+
+Para activar el CD en producción, configurar estos secrets en el repositorio:
+
+| Secret | Descripción |
+|---|---|
+| `EC2_HOST` | IP pública o DNS de la instancia EC2 |
+| `EC2_USER` | Usuario SSH (e.g. `ec2-user`) |
+| `EC2_SSH_KEY` | Contenido de la llave privada PEM |

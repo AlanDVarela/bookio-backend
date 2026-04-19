@@ -1,5 +1,6 @@
 import { prisma } from '../../database/prisma';
 import { publishEvent } from '../middlewares/sns.service';
+import { Prisma } from '@prisma/client';
 
 export class AppointmentsService {
   /**
