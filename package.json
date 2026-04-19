@@ -9,7 +9,13 @@
     "build": "tsc",
     "test": "jest --config jest.config.ts",
     "lint": "eslint src/ tests/",
-    "lint:fix": "eslint src/ tests/ --fix"
+    "lint:fix": "eslint src/ tests/ --fix",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "eslint --fix"
+    ]
   },
   "repository": {
     "type": "git",
