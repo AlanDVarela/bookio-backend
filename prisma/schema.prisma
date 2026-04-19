@@ -39,6 +39,7 @@ model User {
   businesses   Business[]
   appointments Appointment[]
   reviews      Review[]
+  favorites    Favorite[]
 }
 
 model Business {
@@ -46,7 +47,7 @@ model Business {
   owner_id String
   name     String
   type     BusinessType
-  address  String
+  address  String?
   logo_url String?
   photos   String[]     @default([]) // Postgres array for multiple images
 
@@ -61,8 +62,10 @@ model Business {
   owner        User          @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   services     Service[]
   schedules    Schedule[]
+  blockedSlots BlockedSlot[]
   appointments Appointment[]
   reviews      Review[]
+  favorites    Favorite[]
 }
 
 model Service {
@@ -75,8 +78,23 @@ model Service {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  business     Business      @relation(fields: [business_id], references: [id], onDelete: Cascade)
-  appointments Appointment[]
+  business         Business          @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  appointments     Appointment[]
+  serviceSchedules ServiceSchedule[]
+}
+
+model ServiceSchedule {
+  id          String   @id @default(uuid())
+  service_id  String
+  day_of_week Int      // 0 = Sunday ... 6 = Saturday
+  start_time  String   // HH:mm
+  end_time    String   // HH:mm
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  service Service @relation(fields: [service_id], references: [id], onDelete: Cascade)
+
+  @@unique([service_id, day_of_week])
 }
 
 model Schedule {
@@ -108,6 +126,30 @@ model Appointment {
   client   User     @relation(fields: [client_id], references: [id], onDelete: Cascade)
   service  Service  @relation(fields: [service_id], references: [id], onDelete: Cascade)
   review   Review?
+}
+
+model BlockedSlot {
+  id          String   @id @default(uuid())
+  business_id String
+  date        String   // YYYY-MM-DD
+  start_time  String?  // HH:mm — null = día completo bloqueado
+  end_time    String?  // HH:mm — null = día completo bloqueado
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+}
+
+model Favorite {
+  id          String   @id @default(uuid())
+  client_id   String
+  business_id String
+  createdAt   DateTime @default(now())
+
+  client   User     @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@unique([client_id, business_id])
 }
 
 model Review {

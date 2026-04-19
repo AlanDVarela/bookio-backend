@@ -9,7 +9,7 @@ export class AppointmentsController {
   //Obtener citas en un dia disponibles
   public async getAvailableSlots(req: Request, res: Response) {
     try {
-      const { businessId, dateStr, serviceDuration } = req.query;
+      const { businessId, dateStr, serviceDuration, serviceId } = req.query;
 
       if (!businessId || !dateStr || !serviceDuration) {
         return res.status(400).json({ error: 'Missing required query parameters' });
@@ -18,7 +18,8 @@ export class AppointmentsController {
       const slots = await appointmentsService.getAvailableSlots(
         businessId as string,
         dateStr as string,
-        parseInt(serviceDuration as string, 10)
+        parseInt(serviceDuration as string, 10),
+        serviceId as string | undefined
       );
 
       return res.status(200).json({ availableSlots: slots });
@@ -57,8 +58,11 @@ export class AppointmentsController {
       return res.status(201).json({ message: 'Appointment booked successfully', appointment });
     } catch (error: any) {
       console.error(error);
-      if (error.message && error.message.includes('Conflict')) {
+      if (error.message?.includes('Conflict')) {
         return res.status(409).json({ error: error.message });
+      }
+      if (error.message?.includes('Past')) {
+        return res.status(400).json({ error: 'No puedes reservar en un horario que ya pasó.' });
       }
       return res.status(500).json({ error: 'Internal Server Error' });
     }
