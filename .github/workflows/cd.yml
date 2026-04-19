@@ -1,9 +1,5 @@
-# ──────────────────────────────────────────────────────────────────────────────
 # Bookio Backend — CD Pipeline
-# Se activa después de que el CI pasa en main (merge de PR).
-# Actualmente configurado como placeholder para despliegue local.
-# Cuando EC2 esté disponible, descomentar los pasos de SSH deploy.
-# ──────────────────────────────────────────────────────────────────────────────
+# Se activa después de que el CI pasa en main (merge de PR)
 name: CD — Deploy
 
 on:
@@ -14,34 +10,34 @@ on:
 
 jobs:
   deploy:
-    name: 🚀 Deploy a Producción
+    name: Deploy a Producción
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: 📥 Checkout del código
+      - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: 🟢 Configurar Node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: 📦 Instalar dependencias
+      - name: Instalar dependencias
         run: npm ci
 
-      - name: 🏗️ Build del proyecto
+      - name: Build del proyecto
         run: npm run build
 
-      - name: ✅ Validar build exitoso
+      - name: Validar build exitoso
         run: |
-          echo "✅ Build completado exitosamente."
-          echo "📦 Artefactos generados en ./dist"
-          ls -la dist/ || echo "⚠️ Directorio dist no encontrado (verificar tsconfig.outDir)"
+          echo "Build completado exitosamente."
+          echo "Artefactos generados en ./dist"
+          ls -la dist/ || echo "Directorio dist no encontrado (verificar tsconfig.outDir)"
 
       # ─── Deploy a EC2 (Descomentar cuando el servidor esté disponible) ────
-      # - name: 🔑 Configurar SSH Key
+      # - name: Configurar SSH Key
       #   run: |
       #     mkdir -p ~/.ssh
       #     echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/bookio-key.pem

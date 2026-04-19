@@ -1,5 +1,6 @@
 import { prisma } from '../../database/prisma';
 import { publishEvent } from '../middlewares/sns.service';
+import { Prisma } from '@prisma/client';
 
 export class AppointmentsService {
   /**
@@ -53,7 +54,7 @@ export class AppointmentsService {
 
       if (slotEnd > endWorkingTime) break;
 
-      const isOverlapping = appointments.some((appt) => {
+      const isOverlapping = appointments.some((appt: { start_datetime: Date; end_datetime: Date }) => {
         return (
           (currentSlotTime >= appt.start_datetime && currentSlotTime < appt.end_datetime) ||
           (slotEnd > appt.start_datetime && slotEnd <= appt.end_datetime) ||
@@ -82,7 +83,7 @@ export class AppointmentsService {
     startDatetime: Date;
     endDatetime: Date;
   }) {
-    const appointment = await prisma.$transaction(async (tx) => {
+    const appointment = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const overlapping = await tx.appointment.findFirst({
         where: {
           business_id: data.businessId,

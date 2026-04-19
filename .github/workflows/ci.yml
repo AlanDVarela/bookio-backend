@@ -1,7 +1,6 @@
-# ──────────────────────────────────────────────────────────────────────────────
 # Bookio Backend — CI Pipeline
 # Se activa en Pull Requests hacia main para garantizar la calidad del código.
-# ──────────────────────────────────────────────────────────────────────────────
+
 name: CI — Lint & Tests
 
 on:
@@ -11,54 +10,60 @@ on:
     branches: [main]
 
 jobs:
-  # ─── Job 1: Análisis Estático ──────────────────────────────────────────────
+  #Analisis estatico
   lint:
-    name: 🔍 Análisis Estático (ESLint)
+    name: Análisis Estático (ESLint)
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout del código
+      - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: 🟢 Configurar Node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: 📦 Instalar dependencias
+      - name: Instalar dependencias
         run: npm ci
 
-      - name: 🔎 Ejecutar ESLint
+      - name: Generar cliente Prisma
+        run: npx prisma generate
+
+      - name: Ejecutar ESLint
         run: npm run lint
 
-  # ─── Job 2: Pruebas Unitarias ─────────────────────────────────────────────
+  # Pruebas unitarias
   test:
-    name: 🧪 Pruebas Unitarias (Jest)
+    name: Pruebas Unitarias (Jest)
     runs-on: ubuntu-latest
     needs: lint
 
     steps:
-      - name: 📥 Checkout del código
+      - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: 🟢 Configurar Node.js
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: 📦 Instalar dependencias
+      - name: Instalar dependencias
         run: npm ci
 
-      - name: 🧪 Ejecutar pruebas unitarias
+      - name: Generar cliente Prisma
+        run: npx prisma generate
+
+      - name: Ejecutar pruebas unitarias
         run: npm test
 
-      - name: 📊 Generar reporte de cobertura
+      - name: Generar reporte de cobertura
         run: npx jest --coverage --config jest.config.ts
         continue-on-error: true
 
-      - name: 📤 Subir reporte de cobertura
+      - name: Subir reporte de cobertura
         uses: actions/upload-artifact@v4
         if: always()
         with:
