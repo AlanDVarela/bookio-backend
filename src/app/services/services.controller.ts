@@ -47,6 +47,66 @@ export class ServicesController {
     }
   }
 
+  public async getServiceSchedule(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const ownerId = req.user?.id;
+      const service = await prisma.service.findUnique({ where: { id }, include: { business: true } });
+      if (!service || service.business.owner_id !== ownerId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      const schedules = await prisma.serviceSchedule.findMany({
+        where: { service_id: id },
+        orderBy: { day_of_week: 'asc' },
+      });
+      return res.status(200).json({ schedules });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  public async upsertServiceScheduleDay(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const { dayOfWeek, startTime, endTime } = req.body;
+      const ownerId = req.user?.id;
+      const service = await prisma.service.findUnique({ where: { id }, include: { business: true } });
+      if (!service || service.business.owner_id !== ownerId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      const schedule = await prisma.serviceSchedule.upsert({
+        where: { service_id_day_of_week: { service_id: id, day_of_week: dayOfWeek } },
+        create: { service_id: id, day_of_week: dayOfWeek, start_time: startTime, end_time: endTime },
+        update: { start_time: startTime, end_time: endTime },
+      });
+      return res.status(200).json({ schedule });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  public async removeServiceScheduleDay(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id, dayId } = req.params as { id: string; dayId: string };
+      const ownerId = req.user?.id;
+      const serviceSchedule = await prisma.serviceSchedule.findUnique({ where: { id: dayId } });
+      if (!serviceSchedule || serviceSchedule.service_id !== id) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      const service = await prisma.service.findUnique({ where: { id }, include: { business: true } });
+      if (!service || service.business.owner_id !== ownerId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      await prisma.serviceSchedule.delete({ where: { id: dayId } });
+      return res.status(200).json({ message: 'Removed' });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
   public async uploadPhoto(req: AuthenticatedRequest, res: Response) {
     try {
       const id = req.params.id as string;

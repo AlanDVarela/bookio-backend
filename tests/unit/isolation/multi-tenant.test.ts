@@ -20,10 +20,16 @@ jest.mock('../../../src/database/prisma', () => ({
     schedule: {
       findUnique: jest.fn(),
     },
+    serviceSchedule: {
+      findMany: jest.fn(),
+    },
     appointment: {
       findMany: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+    },
+    blockedSlot: {
+      findMany: jest.fn(),
     },
     $transaction: jest.fn(),
   },
@@ -40,6 +46,7 @@ const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
 // ─── Datos mock para 2 tenants distintos ────────────────────────────────────
 const TENANT_A = 'business-aaa-111';
 const TENANT_B = 'business-bbb-222';
+const FUTURE_DATE = '2030-06-15';
 
 const servicesForTenantA = [
   { id: 'svc-a1', name: 'Corte de Cabello', business_id: TENANT_A, price: 200 },
@@ -64,12 +71,10 @@ describe('Multi-Tenant Isolation', () => {
 
       const result = await servicesService.getServicesByBusinessId(TENANT_A);
 
-      // Verifica que Prisma fue llamado con el filtro correcto
       expect(mockedPrisma.service.findMany).toHaveBeenCalledWith({
         where: { business_id: TENANT_A },
       });
 
-      // Verifica que TODOS los resultados pertenecen al tenant correcto
       result.forEach((svc: any) => {
         expect(svc.business_id).toBe(TENANT_A);
       });
@@ -94,12 +99,10 @@ describe('Multi-Tenant Isolation', () => {
     });
 
     it('should NOT return Tenant B services when querying Tenant A', async () => {
-      // Simular que Prisma correctmente filtra — solo retorna Tenant A
       (mockedPrisma.service.findMany as jest.Mock).mockResolvedValue(servicesForTenantA);
 
       const result = await servicesService.getServicesByBusinessId(TENANT_A);
 
-      // Verificar que ningún servicio de Tenant B aparece en los resultados
       const hasTenantBData = result.some((svc: any) => svc.business_id === TENANT_B);
       expect(hasTenantBData).toBe(false);
     });
@@ -112,9 +115,8 @@ describe('Multi-Tenant Isolation', () => {
     it('should query schedule only for the specified business_id', async () => {
       (mockedPrisma.schedule.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await appointmentsService.getAvailableSlots(TENANT_A, '2026-04-20', 30);
+      await appointmentsService.getAvailableSlots(TENANT_A, FUTURE_DATE, 30);
 
-      // Verificar que el filtro incluye el business_id correcto
       expect(mockedPrisma.schedule.findUnique).toHaveBeenCalledWith({
         where: {
           business_id_day_of_week: {
@@ -125,8 +127,7 @@ describe('Multi-Tenant Isolation', () => {
       });
     });
 
-    it('should query appointments only for the specified business_id', async () => {
-      // Schedule existe para este tenant
+    it('should query appointments and blockedSlots only for the specified business_id', async () => {
       (mockedPrisma.schedule.findUnique as jest.Mock).mockResolvedValue({
         business_id: TENANT_A,
         day_of_week: 1,
@@ -135,8 +136,9 @@ describe('Multi-Tenant Isolation', () => {
       });
 
       (mockedPrisma.appointment.findMany as jest.Mock).mockResolvedValue([]);
+      (mockedPrisma.blockedSlot.findMany as jest.Mock).mockResolvedValue([]);
 
-      await appointmentsService.getAvailableSlots(TENANT_A, '2026-04-20', 30);
+      await appointmentsService.getAvailableSlots(TENANT_A, FUTURE_DATE, 30);
 
       // Verificar que las citas se filtran por business_id
       expect(mockedPrisma.appointment.findMany).toHaveBeenCalledWith(
@@ -146,18 +148,24 @@ describe('Multi-Tenant Isolation', () => {
           }),
         })
       );
+
+      // Verificar que los bloqueos se filtran por business_id
+      expect(mockedPrisma.blockedSlot.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            business_id: TENANT_A,
+          }),
+        })
+      );
     });
 
     it('should NOT leak schedule data from Tenant B when querying Tenant A', async () => {
-      // Tenant A no tiene schedule para ese día
       (mockedPrisma.schedule.findUnique as jest.Mock).mockResolvedValue(null);
 
-      const slotsA = await appointmentsService.getAvailableSlots(TENANT_A, '2026-04-20', 30);
+      const slotsA = await appointmentsService.getAvailableSlots(TENANT_A, FUTURE_DATE, 30);
 
-      // Sin schedule, no debe retornar slots
       expect(slotsA).toEqual([]);
 
-      // Verificar que NO se consultó el schedule de Tenant B
       const calls = (mockedPrisma.schedule.findUnique as jest.Mock).mock.calls;
       calls.forEach((call) => {
         const businessId = call[0].where.business_id_day_of_week.business_id;
@@ -182,13 +190,11 @@ describe('Multi-Tenant Isolation', () => {
 
       const result = await servicesService.getServiceById('svc-a1');
 
-      // Verifica que incluye la relación business para validar ownership
       expect(mockedPrisma.service.findUnique).toHaveBeenCalledWith({
         where: { id: 'svc-a1' },
         include: { business: true },
       });
 
-      // Verifica que el owner pertenece al tenant correcto
       expect(result?.business.owner_id).toBe('owner-tenant-a');
     });
   });

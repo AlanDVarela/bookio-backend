@@ -6,7 +6,7 @@ export class AppointmentsService {
   /**
    * Obtiene los slots disponibles para un negocio en una fecha dada basado en sus Schedules y citas existentes.
    */
-  public async getAvailableSlots(businessId: string, dateStr: string, serviceDurationMinutes: number) {
+  public async getAvailableSlots(businessId: string, dateStr: string, serviceDurationMinutes: number, serviceId?: string) {
     const targetDate = new Date(dateStr);
     const dayOfWeek = targetDate.getUTCDay();
 
@@ -21,27 +21,55 @@ export class AppointmentsService {
 
     if (!schedule) return [];
 
+    // Calcular ventana efectiva: intersección entre horario del negocio y horario del servicio
+    let effectiveStart = schedule.start_time;
+    let effectiveEnd   = schedule.end_time;
+
+    if (serviceId) {
+      const serviceSchedules = await prisma.serviceSchedule.findMany({
+        where: { service_id: serviceId },
+      });
+
+      if (serviceSchedules.length > 0) {
+        const serviceDay = serviceSchedules.find((s) => s.day_of_week === dayOfWeek);
+        if (!serviceDay) return []; // Servicio no disponible este día
+
+        // max(business.start, service.start)
+        effectiveStart = serviceDay.start_time > schedule.start_time ? serviceDay.start_time : schedule.start_time;
+        // min(business.end, service.end)
+        effectiveEnd   = serviceDay.end_time < schedule.end_time ? serviceDay.end_time : schedule.end_time;
+
+        if (effectiveStart >= effectiveEnd) return [];
+      }
+      // Si el servicio no tiene entradas, hereda el horario completo del negocio
+    }
+
     const startOfDay = new Date(targetDate);
     startOfDay.setUTCHours(0, 0, 0, 0);
 
     const endOfDay = new Date(targetDate);
     endOfDay.setUTCHours(23, 59, 59, 999);
 
-    const appointments = await prisma.appointment.findMany({
-      where: {
-        business_id: businessId,
-        status: { in: ['CONFIRMED', 'PENDING'] },
-        start_datetime: {
-          gte: startOfDay,
-          lt: endOfDay,
+    const [appointments, blockedSlots] = await Promise.all([
+      prisma.appointment.findMany({
+        where: {
+          business_id: businessId,
+          status: { in: ['CONFIRMED', 'PENDING'] },
+          start_datetime: { gte: startOfDay, lt: endOfDay },
         },
-      },
-      orderBy: { start_datetime: 'asc' },
-    });
+        orderBy: { start_datetime: 'asc' },
+      }),
+      prisma.blockedSlot.findMany({
+        where: { business_id: businessId, date: dateStr },
+      }),
+    ]);
+
+    // Si hay un bloqueo de día completo, no hay slots disponibles
+    if (blockedSlots.some((b) => !b.start_time || !b.end_time)) return [];
 
     const availableSlots: string[] = [];
-    const [startHour, startMinute] = schedule.start_time.split(':').map(Number);
-    const [endHour, endMinute] = schedule.end_time.split(':').map(Number);
+    const [startHour, startMinute] = effectiveStart.split(':').map(Number);
+    const [endHour, endMinute]     = effectiveEnd.split(':').map(Number);
 
     let currentSlotTime = new Date(targetDate);
     currentSlotTime.setUTCHours(startHour, startMinute, 0, 0);
@@ -49,20 +77,36 @@ export class AppointmentsService {
     const endWorkingTime = new Date(targetDate);
     endWorkingTime.setUTCHours(endHour, endMinute, 0, 0);
 
+    const now = new Date();
+
     while (currentSlotTime < endWorkingTime) {
       const slotEnd = new Date(currentSlotTime.getTime() + serviceDurationMinutes * 60000);
 
       if (slotEnd > endWorkingTime) break;
 
-      const isOverlapping = appointments.some((appt: { start_datetime: Date; end_datetime: Date }) => {
-        return (
-          (currentSlotTime >= appt.start_datetime && currentSlotTime < appt.end_datetime) ||
-          (slotEnd > appt.start_datetime && slotEnd <= appt.end_datetime) ||
-          (currentSlotTime <= appt.start_datetime && slotEnd >= appt.end_datetime)
-        );
+      // Omitir slots que ya pasaron (incluso si es hoy)
+      if (slotEnd <= now) {
+        currentSlotTime = new Date(currentSlotTime.getTime() + serviceDurationMinutes * 60000);
+        continue;
+      }
+
+      const isOverlapping = appointments.some((appt) => (
+        currentSlotTime < appt.end_datetime && slotEnd > appt.start_datetime
+      ));
+
+      // Verificar bloqueos parciales de horario
+      const isBlocked = blockedSlots.some((b) => {
+        if (!b.start_time || !b.end_time) return false; // día completo ya manejado arriba
+        const [bsh, bsm] = b.start_time.split(':').map(Number);
+        const [beh, bem] = b.end_time.split(':').map(Number);
+        const blockStart = new Date(targetDate);
+        blockStart.setUTCHours(bsh, bsm, 0, 0);
+        const blockEnd = new Date(targetDate);
+        blockEnd.setUTCHours(beh, bem, 0, 0);
+        return currentSlotTime < blockEnd && slotEnd > blockStart;
       });
 
-      if (!isOverlapping) {
+      if (!isOverlapping && !isBlocked) {
         availableSlots.push(
           `${currentSlotTime.getUTCHours().toString().padStart(2, '0')}:${currentSlotTime.getUTCMinutes().toString().padStart(2, '0')}`
         );
@@ -83,7 +127,11 @@ export class AppointmentsService {
     startDatetime: Date;
     endDatetime: Date;
   }) {
-    const appointment = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    if (data.startDatetime <= new Date()) {
+      throw new Error('Past: Cannot book a slot that has already passed.');
+    }
+
+    const appointment = await prisma.$transaction(async (tx) => {
       const overlapping = await tx.appointment.findFirst({
         where: {
           business_id: data.businessId,

@@ -84,6 +84,15 @@ async function main() {
           { name: 'Corte de Cabello Clásico', duration_minutes: 30, price: 200.00 },
           { name: 'Arreglo de Barba', duration_minutes: 20, price: 150.00 }
         ]
+      },
+      schedules: {
+        create: [
+          { day_of_week: 1, start_time: '09:00', end_time: '18:00' },
+          { day_of_week: 2, start_time: '09:00', end_time: '18:00' },
+          { day_of_week: 3, start_time: '09:00', end_time: '18:00' },
+          { day_of_week: 4, start_time: '09:00', end_time: '18:00' },
+          { day_of_week: 5, start_time: '09:00', end_time: '18:00' }
+        ]
       }
     }
   });
