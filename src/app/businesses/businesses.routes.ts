@@ -10,13 +10,14 @@ const businessesController = new BusinessesController();
 //Rutas publicas
 router.get('/recommended', businessesController.getRecommended);
 router.get('/', businessesController.getAll);
+
+//Rutas privadas Business_Owner — deben ir ANTES de /:id para que Express no las capture como parámetro
+router.get('/mine',        authenticateJWT, requireRole('BUSINESS_OWNER'), businessesController.getMine);
+router.get('/metrics',     authenticateJWT, requireRole('BUSINESS_OWNER'), businessesController.getMetrics);
+router.get('/reservations',authenticateJWT, requireRole('BUSINESS_OWNER'), businessesController.getReservations);
+
 router.get('/:id', businessesController.getById);
 router.get('/:id/services', businessesController.getBusinessServices);
-
-
-//Rutas privadas Business_Owner
-router.get('/metrics', authenticateJWT, requireRole('BUSINESS_OWNER'), businessesController.getMetrics);
-router.get('/reservations', authenticateJWT, requireRole('BUSINESS_OWNER'), businessesController.getReservations);
 router.post(
   '/',
   authenticateJWT,

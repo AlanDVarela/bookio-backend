@@ -116,6 +116,10 @@ export class BusinessesService {
       include: {
         services: true,
         schedules: true,
+        blockedSlots: {
+          where: { start_time: null }, // solo bloqueos de día completo
+          select: { date: true },
+        },
       },
     });
   }
