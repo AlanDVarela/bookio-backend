@@ -132,4 +132,28 @@ export class ServicesController {
       return res.status(500).json({ error: 'Internal Server Error uploading service photo' });
     }
   }
+
+  public async updateService(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const ownerId = req.user?.id;
+      const { name, durationMinutes, price } = req.body;
+
+      const service = await servicesService.getServiceById(id);
+      if (!service || service.business.owner_id !== ownerId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const updated = await servicesService.updateService(id, {
+        name,
+        durationMinutes,
+        price,
+      });
+
+      return res.status(200).json({ message: 'Service updated successfully', service: updated });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 }

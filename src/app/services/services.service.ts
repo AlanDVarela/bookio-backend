@@ -36,4 +36,19 @@ export class ServicesService {
       include: { business: true }
     });
   }
+
+  public async updateService(id: string, data: {
+    name?: string;
+    durationMinutes?: number;
+    price?: number;
+  }) {
+    return prisma.service.update({
+      where: { id },
+      data: {
+        name: data.name,
+        duration_minutes: data.durationMinutes,
+        price: data.price,
+      },
+    });
+  }
 }

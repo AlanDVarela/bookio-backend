@@ -53,4 +53,41 @@ export class UsersController {
       return res.status(500).json({ error: 'Internal Server Error uploading avatar' });
     }
   }
+
+  public async updateProfile(req: any, res: Response) {
+    try {
+      const userId = req.user.id; 
+      const { name, phone } = req.body;
+
+      if (!name && !phone) {
+        return res.status(400).json({ error: 'No data provided to update' });
+      }
+
+      const updatedUser = await usersService.updateProfile(userId, { name, phone });
+      
+      res.status(200).json({ 
+        message: 'Profile updated successfully', 
+        user: updatedUser 
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error updating profile' });
+    }
+  }
+
+  public async deleteAccount(req: any, res: Response) {
+    try {
+      const { id } = req.params;
+
+      if (req.user?.id !== id) {
+        return res.status(403).json({ error: 'You can only delete your own account' });
+      }
+
+      await usersService.deleteUser(id);
+      res.status(200).json({ message: 'User deleted successfully' });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error deleting user' });
+    }
+  }
 }

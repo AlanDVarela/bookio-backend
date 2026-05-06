@@ -13,6 +13,22 @@ export class UsersService {
     });
   }
 
+  public async updateProfile(userId: string, data: { name?: string; phone?: string }) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: data.name,
+        phone: data.phone,
+      },
+    });
+  }
+
+  public async deleteUser(userId: string) {
+    return prisma.user.delete({
+      where: { id: userId },
+    });
+  }
+
   public async getUserById(userId: string) {
     return prisma.user.findUnique({
       where: { id: userId },

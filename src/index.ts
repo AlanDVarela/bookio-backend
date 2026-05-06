@@ -5,7 +5,16 @@ import globalRouter from './app/routes';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "http://localhost:5000", //Flutter
+    "http://bookio-static-website.s3-website-us-east-1.amazonaws.com", //Pagina 
+    "https://bookio-static-website.s3.us-east-1.amazonaws.com" //Api s3
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Main Router
@@ -35,3 +44,4 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 export default app;
+console.log(`[Server] Bookio Backend started at: ${new Date().toISOString()}`);

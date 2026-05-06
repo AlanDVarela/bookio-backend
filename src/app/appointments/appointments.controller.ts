@@ -68,6 +68,46 @@ export class AppointmentsController {
     }
   }
 
+  // Crear cita manual (Solo para dueños)
+  public async bookManualAppointment(req: AuthenticatedRequest, res: Response) {
+    try {
+      // Idealmente, se valida con un middleware que req.user.role === 'BUSINESS_OWNER'
+      const { businessId, serviceId, startDatetime, clientName, clientPhone } = req.body;
+
+      if (!clientName) {
+        return res.status(400).json({ error: 'clientName is required for manual appointments' });
+      }
+
+      const service = await prisma.service.findUnique({ where: { id: serviceId } });
+      if (!service) {
+        return res.status(404).json({ error: 'Service not found' });
+      }
+
+      const startObj = new Date(startDatetime);
+      const endObj = new Date(startObj.getTime() + service.duration_minutes * 60000);
+
+      const appointment = await appointmentsService.createManualAppointment({
+        businessId,
+        serviceId,
+        startDatetime: startObj,
+        endDatetime: endObj,
+        clientName,
+        clientPhone,
+      });
+
+      return res.status(201).json({ message: 'Manual appointment booked successfully', appointment });
+    } catch (error: any) {
+      console.error(error);
+      if (error.message?.includes('Conflict')) {
+        return res.status(409).json({ error: error.message });
+      }
+      if (error.message?.includes('Past')) {
+        return res.status(400).json({ error: 'No puedes reservar en un horario que ya pasó.' });
+      }
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
   // Obtener todas las citas
   public async getAll(req: Request, res: Response) {
     try {

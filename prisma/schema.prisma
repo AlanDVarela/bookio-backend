@@ -24,6 +24,8 @@ enum AppointmentStatus {
   PENDING
   CONFIRMED
   CANCELLED
+  IN_PROGRESS
+  COMPLETED
 }
 
 model User {
@@ -114,7 +116,9 @@ model Schedule {
 model Appointment {
   id             String            @id @default(uuid())
   business_id    String
-  client_id      String
+  client_id      String?           // Opcional para citas manuales (walk-ins)
+  client_name    String?           // Nombre del cliente para citas manuales
+  client_phone   String?           // Teléfono del cliente para citas manuales
   service_id     String
   start_datetime DateTime
   end_datetime   DateTime
@@ -123,7 +127,7 @@ model Appointment {
   updatedAt      DateTime          @updatedAt
 
   business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
-  client   User     @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  client   User?    @relation(fields: [client_id], references: [id], onDelete: Cascade)
   service  Service  @relation(fields: [service_id], references: [id], onDelete: Cascade)
   review   Review?
 }
