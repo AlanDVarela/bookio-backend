@@ -173,7 +173,74 @@ export class AppointmentsService {
     return appointment;
   }
 
+  /**
+   * Crea una reservación manual (Walk-in) sin asociarla a un usuario registrado de Firebase.
+   */
+  public async createManualAppointment(data: {
+    businessId: string;
+    clientName: string;
+    clientPhone?: string;
+    serviceId: string;
+    startDatetime: Date;
+    endDatetime: Date;
+  }) {
+    if (data.startDatetime <= new Date()) {
+      throw new Error('Past: Cannot book a slot that has already passed.');
+    }
+
+    const appointment = await prisma.$transaction(async (tx) => {
+      const overlapping = await tx.appointment.findFirst({
+        where: {
+          business_id: data.businessId,
+          status: { in: ['CONFIRMED', 'PENDING'] },
+          OR: [
+            {
+              start_datetime: { lt: data.endDatetime },
+              end_datetime: { gt: data.startDatetime },
+            },
+          ],
+        },
+      });
+
+      if (overlapping) {
+        throw new Error('Conflict: Time slot is already booked.');
+      }
+
+      const newAppointment = await tx.appointment.create({
+        data: {
+          business_id: data.businessId,
+          client_name: data.clientName,
+          client_phone: data.clientPhone,
+          service_id: data.serviceId,
+          start_datetime: data.startDatetime,
+          end_datetime: data.endDatetime,
+          status: 'CONFIRMED',
+        },
+      });
+
+      return newAppointment;
+    });
+
+    return appointment;
+  }
+
+  /**
+   * Auto-completa las citas que ya pasaron su tiempo de término y estaban en curso.
+   */
+  public async autoUpdateStatuses() {
+    const now = new Date();
+    await prisma.appointment.updateMany({
+      where: {
+        status: 'IN_PROGRESS',
+        end_datetime: { lt: now }
+      },
+      data: { status: 'COMPLETED' }
+    });
+  }
+
   public async getAppointmentsByFilter(filters: { businessId?: string; clientId?: string }) {
+    await this.autoUpdateStatuses();
+    
     const whereClause: any = {};
     if (filters.businessId) whereClause.business_id = filters.businessId;
     if (filters.clientId) whereClause.client_id = filters.clientId;
@@ -188,7 +255,7 @@ export class AppointmentsService {
     });
   }
 
-  public async updateAppointmentStatus(id: string, status: 'PENDING' | 'CONFIRMED' | 'CANCELLED') {
+  public async updateAppointmentStatus(id: string, status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'IN_PROGRESS' | 'COMPLETED') {
     return prisma.appointment.update({
       where: { id },
       data: { status },

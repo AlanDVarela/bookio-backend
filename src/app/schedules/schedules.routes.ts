@@ -7,6 +7,9 @@ const controller = new SchedulesController();
 
 const auth = [authenticateJWT, requireRole('BUSINESS_OWNER')];
 
+// Ruta pública — debe ir antes de las rutas con auth
+router.get('/business/:businessId', controller.getByBusiness);
+
 router.get('/',               ...auth, controller.getMine);
 router.put('/',               ...auth, controller.upsertDay);
 router.delete('/:id',         ...auth, controller.removeDay);

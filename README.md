@@ -163,54 +163,85 @@ bookio-backend/
 
 ## 📡 API Reference (`/api/v1`)
 
-A continuación se listan los endpoints principales agrupados por dominio. Todos los endpoints que requieren autenticación esperan un `Bearer Token` de Firebase válido en los headers.
+A continuación se listan los endpoints agrupados por dominio. Los endpoints protegidos esperan un `Authorization: Bearer <firebase-id-token>` válido en los headers.
 
 ### 🔐 Autenticación (`/auth`)
-| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+
+| Método | Endpoint | Descripción | Body | Auth |
 |---|---|---|---|---|
-| POST | `/auth/login` | Login inicial en backend | `{}` | `Auth: Bearer` |
-| POST | `/auth/register/client` | Registra a un nuevo usuario como `CLIENT` | `{ name, phone }` | `Auth: Bearer` |
-| POST | `/auth/register/business` | Registra a un nuevo usuario como `BUSINESS_OWNER` | `{ name, phone }` | `Auth: Bearer` |
-| GET | `/auth/me` | Devuelve el perfil completo del usuario autenticado | N/A | `Auth: Bearer` |
+| POST | `/auth/register` | Registra o loguea al usuario (upsert por Firebase UID). Retorna `{ user }` | `{ idToken, role, name?, phone? }` | Público |
+| GET | `/auth/me` | Retorna el perfil completo del usuario autenticado. Retorna `{ user }` | — | Bearer |
+
+### 👤 Usuarios (`/users`)
+
+| Método | Endpoint | Descripción | Body | Auth |
+|---|---|---|---|---|
+| GET | `/users` | Lista todos los usuarios. Retorna `{ users[] }` | — | Bearer |
+| GET | `/users/:id` | Obtiene un usuario por ID. Retorna `{ user }` | — | Bearer |
+| PUT | `/users/profile` | Actualiza nombre y/o teléfono del usuario autenticado. Retorna `{ message, user }` | `{ name?, phone? }` | Bearer |
+| PATCH | `/users/:id/avatar` | Sube foto de perfil (multipart). Retorna `{ message, avatar_url }` | `FormData: photo` | Bearer (propio) |
+| DELETE | `/users/:id` | Elimina la cuenta propia. Retorna `{ message }` | — | Bearer (propio) |
 
 ### 🏢 Negocios (`/businesses`)
-| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+
+| Método | Endpoint | Descripción | Body / Query | Auth |
 |---|---|---|---|---|
-| GET | `/businesses` | Obtiene el directorio de negocios | `?page, limit` | Público |
-| GET | `/businesses/recommended` | Obtiene top 5 de negocios mejor evaluados | N/A | Público |
-| GET | `/businesses/:id` | Detalle público del negocio | N/A | Público |
-| GET | `/businesses/:id/services` | Lista los servicios ofrecidos por un negocio | N/A | Público |
-| GET | `/businesses/metrics` | Obtiene los KPIs de rendimiento del negocio | N/A | `Auth: Bearer` (Owner) |
-| GET | `/businesses/reservations` | Obtiene lista de reservas filtrada opcionalmente por fecha | `?date=YYYY-MM-DD` | `Auth: Bearer` (Owner) |
+| GET | `/businesses` | Directorio paginado con filtros. Retorna `{ data[], total, page, limit }` | `?type, ratingGte, search, page, limit` | Público |
+| GET | `/businesses/recommended` | Top 5 negocios. Retorna `{ data[], ... }` | — | Público |
+| GET | `/businesses/mine` | Negocio del dueño autenticado (incluye servicios). Retorna `{ business }` | — | Bearer (Owner) |
+| GET | `/businesses/metrics` | KPIs: citas hoy/semana, ingresos, ocupación, gráficas. Retorna `{ metrics }` | — | Bearer (Owner) |
+| GET | `/businesses/reservations` | Lista de reservas del negocio, con filtro opcional por fecha. Retorna `{ reservations[] }` | `?date=YYYY-MM-DD` | Bearer (Owner) |
+| GET | `/businesses/:id` | Detalle público de un negocio. Retorna `{ business }` | — | Público |
+| GET | `/businesses/:id/services` | Servicios ofrecidos por un negocio. Retorna `{ services[] }` | — | Público |
+| POST | `/businesses` | Registra un nuevo negocio (con logo opcional). Retorna `{ message, business }` | `{ name, type, address, latitude?, longitude? }` + `FormData: logo?` | Bearer (Owner) |
+| POST | `/businesses/:id/photos` | Sube hasta 5 fotos del negocio. Retorna `{ message, photos[] }` | `FormData: photos[]` | Bearer (Owner) |
 
 ### 📅 Citas (`/appointments`)
-| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
-|---|---|---|---|---|
-| GET | `/appointments` | Obtiene citas. Permite filtrar por estado temporal | `?status=upcoming/past/cancelled` | `Auth: Bearer` |
-| GET | `/appointments/slots` | Obtiene slots disponibles para realizar una reserva | `?businessId, date` | Público / Auth |
-| POST | `/appointments` | Reserva una nueva cita | `{ businessId, serviceId, startDatetime... }` | `Auth: Bearer` (Client) |
-| PUT | `/appointments/:id/status` | Cambia el estado (CONFIRMED/CANCELLED) | `{ status }` | `Auth: Bearer` |
 
-### ⭐ Favoritos & Reseñas (`/favorites`, `/reviews`)
-| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+| Método | Endpoint | Descripción | Body / Query | Auth |
 |---|---|---|---|---|
-| GET | `/favorites` | Obtiene lista de negocios favoritos del usuario | N/A | `Auth: Bearer` (Client) |
-| POST | `/favorites` | Guarda un negocio en favoritos | `{ businessId }` | `Auth: Bearer` (Client) |
-| DELETE| `/favorites/:id` | Remueve de favoritos | N/A | `Auth: Bearer` (Client) |
-| POST | `/reviews` | Sube una evaluación pos-cita | `{ score, comment, appointment_id }`| `Auth: Bearer` (Client) |
-| GET | `/reviews/business/:id` | Obtiene todas las revisiones publicadas de un negocio | N/A | Público |
+| GET | `/appointments/slots` | Slots disponibles para reservar. Retorna `{ availableSlots[] }` | `?businessId, dateStr, serviceDuration, serviceId?` | Público |
+| GET | `/appointments` | Lista citas con filtros opcionales. Retorna `{ appointments[] }` | `?businessId?, clientId?, status?` (upcoming/past/cancelled) | Bearer |
+| POST | `/appointments` | Reserva una cita. Retorna `{ message, appointment }` | `{ businessId, serviceId, startDatetime }` | Bearer (Client) |
+| PUT | `/appointments/:id/status` | Cambia el estado de la cita. Retorna `{ message, appointment }` | `{ status }` (PENDING/CONFIRMED/CANCELLED) | Bearer |
+| DELETE | `/appointments/:id` | Elimina una cita. Retorna `{ message }` | — | Bearer |
+
+### ⭐ Favoritos (`/favorites`)
+
+| Método | Endpoint | Descripción | Body | Auth |
+|---|---|---|---|---|
+| GET | `/favorites` | Lista los negocios favoritos del cliente. Retorna `{ favorites[] }` | — | Bearer (Client) |
+| POST | `/favorites` | Agrega un negocio a favoritos. Retorna `{ favorite }` | `{ businessId }` | Bearer (Client) |
+| DELETE | `/favorites/:id` | Elimina un favorito. Retorna `{ message }` | — | Bearer (Client) |
+
+### 💬 Reseñas (`/reviews`)
+
+| Método | Endpoint | Descripción | Body | Auth |
+|---|---|---|---|---|
+| POST | `/reviews` | Crea una evaluación post-cita. Retorna `{ review }` | `{ score, comment, appointment_id }` | Bearer (Client) |
+| GET | `/reviews/business/:businessId` | Reseñas públicas de un negocio. Retorna `{ reviews[] }` | — | Público |
 
 ### 🛠️ Servicios (`/services`)
-| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+
+| Método | Endpoint | Descripción | Body | Auth |
 |---|---|---|---|---|
-| GET | `/services` | Obtiene los servicios del negocio del dueño autenticado | N/A | `Auth: Bearer` (Owner) |
-| POST | `/services` | Crea un nuevo servicio para el negocio del dueño | `{ name, durationMinutes, price }` | `Auth: Bearer` (Owner) |
-| PATCH | `/services/:id/photo` | Sube/actualiza la foto de un servicio (multipart `photo`) | `FormData: photo` | `Auth: Bearer` (Owner) |
+| GET | `/services` | Servicios del negocio autenticado. Retorna `{ services[] }` | — | Bearer (Owner) |
+| POST | `/services` | Crea un servicio. Retorna `{ service }` | `{ name, durationMinutes, price }` | Bearer (Owner) |
+| GET | `/services/:id/schedule` | Horario semanal de un servicio. Retorna `{ schedules[] }` | — | Bearer (Owner) |
+| PUT | `/services/:id/schedule` | Crea o actualiza un día del horario del servicio. Retorna `{ schedule }` | `{ dayOfWeek, startTime, endTime }` | Bearer (Owner) |
+| DELETE | `/services/:id/schedule/:dayId` | Elimina un día del horario del servicio. Retorna `{ message }` | — | Bearer (Owner) |
+| PATCH | `/services/:id/photo` | Sube foto del servicio (multipart). Retorna `{ message, photo_url }` | `FormData: photo` | Bearer (Owner) |
 
 ### 🗓️ Horarios (`/schedules`)
-| Método | Endpoint | Descripción | Body / Query | Headers requeridos |
+
+| Método | Endpoint | Descripción | Body | Auth |
 |---|---|---|---|---|
-| POST | `/schedules` | Crea un horario laboral para un negocio | `{ businessId, dayOfWeek, startTime, endTime }` | `Auth: Bearer` (Owner) |
+| GET | `/schedules/business/:businessId` | Horario semanal público de un negocio. Retorna `{ schedules[], blockedSlots[] }` | — | **Público** |
+| GET | `/schedules` | Horario + bloqueos del negocio autenticado. Retorna `{ schedules[], blockedSlots[] }` | — | Bearer (Owner) |
+| PUT | `/schedules` | Crea o actualiza un día laboral. Retorna `{ schedule }` | `{ dayOfWeek, startTime, endTime }` | Bearer (Owner) |
+| DELETE | `/schedules/:id` | Elimina un día laboral. Retorna `{ message }` | — | Bearer (Owner) |
+| POST | `/schedules/blocked` | Agrega un bloqueo de horario. Retorna `{ blockedSlot }` | `{ date, startTime?, endTime?, reason? }` | Bearer (Owner) |
+| DELETE | `/schedules/blocked/:id` | Elimina un bloqueo. Retorna `{ message }` | — | Bearer (Owner) |
 
 ---
 

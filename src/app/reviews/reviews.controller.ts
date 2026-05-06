@@ -37,7 +37,7 @@ export class ReviewsController {
         return res.status(400).json({ error: 'Review already exists for this appointment' });
       }
 
-      const review = await reviewsService.createReview({
+      const { review, business } = await reviewsService.createReview({
         clientId,
         businessId: appointment.business_id,
         appointmentId,
@@ -45,7 +45,11 @@ export class ReviewsController {
         comment
       });
 
-      return res.status(201).json({ message: 'Review successfully submitted', review });
+      return res.status(201).json({ 
+        message: 'Review successfully submitted', 
+        review,
+        business 
+      });
     } catch (error) {
       console.error(error);
       return res.status(500).json({ error: 'Internal Server Error submitting review' });

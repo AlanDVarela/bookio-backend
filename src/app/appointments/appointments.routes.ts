@@ -18,6 +18,13 @@ router.post(
   appointmentsController.bookAppointment
 );
 
+router.post(
+  '/manual',
+  authenticateJWT,
+  requireRole('BUSINESS_OWNER'),
+  appointmentsController.bookManualAppointment
+);
+
 router.put('/:id/status', authenticateJWT, appointmentsController.updateStatus);
 router.delete('/:id', authenticateJWT, appointmentsController.deleteAppointment);
 
