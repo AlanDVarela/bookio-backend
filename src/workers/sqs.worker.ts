@@ -44,7 +44,7 @@ const poll = async () => {
 
     if (result.Messages?.length) {
       await Promise.allSettled(
-        result.Messages.map((msg) =>
+        result.Messages.map((msg: { Body?: string; ReceiptHandle?: string; MessageId?: string }) =>
           processMessage(msg.Body!, msg.ReceiptHandle!).catch((err) =>
             console.error(`[SQS] Error procesando mensaje ${msg.MessageId}:`, err),
           ),
