@@ -41,7 +41,9 @@ if (process.env.NODE_ENV !== 'test') {
     await prisma.$connect();
     console.log('Database connected successfully');
 
-    startSQSWorker();
+    if (process.env.NODE_ENV === 'production') {
+      startSQSWorker();
+    }
 
     app.listen(env.PORT, () => {
       console.log(`[Server] Bookio Backend running on port ${env.PORT}`);
