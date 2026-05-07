@@ -12,6 +12,7 @@ jest.mock('../../../src/database/prisma', () => ({
     appointment: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -23,9 +24,9 @@ jest.mock('../../../src/database/prisma', () => ({
   },
 }));
 
-// ─── Mock SNS ───────────────────────────────────────────────────────────────
-jest.mock('../../../src/app/middlewares/sns.service', () => ({
-  publishEvent: jest.fn().mockResolvedValue(undefined),
+// ─── Mock SQS queue ─────────────────────────────────────────────────────────
+jest.mock('../../../src/services/queue.service', () => ({
+  publishAppointmentEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { prisma } from '../../../src/database/prisma';
@@ -192,7 +193,9 @@ describe('AppointmentsService', () => {
         return callback(tx);
       });
 
-      const { publishEvent } = require('../../../src/app/middlewares/sns.service');
+      (mockedPrisma.appointment.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const { publishAppointmentEvent } = require('../../../src/services/queue.service');
 
       const result = await service.createAppointment({
         businessId: 'biz-1',
@@ -203,12 +206,7 @@ describe('AppointmentsService', () => {
       });
 
       expect(result).toEqual(newAppt);
-      expect(publishEvent).toHaveBeenCalledWith('AppointmentConfirmed', {
-        appointmentId: 'apt-new',
-        businessId: 'biz-1',
-        clientId: 'client-1',
-        startDatetime: new Date('2030-06-15T09:00:00Z'),
-      });
+      expect(publishAppointmentEvent).not.toHaveBeenCalled();
     });
   });
 

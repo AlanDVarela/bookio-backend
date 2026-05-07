@@ -1,5 +1,5 @@
 import { prisma } from '../../database/prisma';
-import { publishEvent } from '../middlewares/sns.service';
+import { publishAppointmentEvent } from '../../services/queue.service';
 import { Prisma } from '@prisma/client';
 
 export class AppointmentsService {
@@ -149,7 +149,7 @@ export class AppointmentsService {
         throw new Error('Conflict: Time slot is already booked.');
       }
 
-      const newAppointment = await tx.appointment.create({
+      return tx.appointment.create({
         data: {
           business_id: data.businessId,
           client_id: data.clientId,
@@ -159,16 +159,32 @@ export class AppointmentsService {
           status: 'CONFIRMED',
         },
       });
-
-      return newAppointment;
     });
 
-    await publishEvent('AppointmentConfirmed', {
-      appointmentId: appointment.id,
-      businessId: appointment.business_id,
-      clientId: appointment.client_id,
-      startDatetime: appointment.start_datetime,
+    // Query separada para el correo (fuera de la transacción)
+    const forEmail = await prisma.appointment.findUnique({
+      where: { id: appointment.id },
+      select: {
+        start_datetime: true,
+        client:   { select: { name: true, email: true } },
+        business: { select: { name: true, logo_url: true } },
+        service:  { select: { name: true, duration_minutes: true } },
+      },
     });
+
+    if (forEmail?.client?.email) {
+      await publishAppointmentEvent({
+        appointmentId:   appointment.id,
+        to:              forEmail.client.email,
+        clientName:      forEmail.client.name,
+        businessName:    forEmail.business.name,
+        serviceName:     forEmail.service.name,
+        datetime:        forEmail.start_datetime.toISOString(),
+        status:          'CONFIRMED',
+        durationMinutes: forEmail.service.duration_minutes ?? undefined,
+        logoUrl:         forEmail.business.logo_url ?? undefined,
+      });
+    }
 
     return appointment;
   }
@@ -256,10 +272,38 @@ export class AppointmentsService {
   }
 
   public async updateAppointmentStatus(id: string, status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'IN_PROGRESS' | 'COMPLETED') {
-    return prisma.appointment.update({
+    const appointment = await prisma.appointment.update({
       where: { id },
       data: { status },
     });
+
+    if (status === 'CANCELLED') {
+      const forEmail = await prisma.appointment.findUnique({
+        where: { id },
+        select: {
+          start_datetime: true,
+          client:   { select: { name: true, email: true } },
+          business: { select: { name: true, logo_url: true } },
+          service:  { select: { name: true, duration_minutes: true } },
+        },
+      });
+
+      if (forEmail?.client?.email) {
+        await publishAppointmentEvent({
+          appointmentId:   appointment.id,
+          to:              forEmail.client.email,
+          clientName:      forEmail.client.name,
+          businessName:    forEmail.business.name,
+          serviceName:     forEmail.service.name,
+          datetime:        forEmail.start_datetime.toISOString(),
+          status:          'CANCELLED',
+          durationMinutes: forEmail.service.duration_minutes ?? undefined,
+          logoUrl:         forEmail.business.logo_url ?? undefined,
+        });
+      }
+    }
+
+    return appointment;
   }
 
   public async deleteAppointment(id: string) {

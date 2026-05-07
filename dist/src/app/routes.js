@@ -1,0 +1,24 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_routes_1 = __importDefault(require("./auth/auth.routes"));
+const users_routes_1 = __importDefault(require("./users/users.routes"));
+const businesses_routes_1 = __importDefault(require("./businesses/businesses.routes"));
+const appointments_routes_1 = __importDefault(require("./appointments/appointments.routes"));
+const services_routes_1 = __importDefault(require("./services/services.routes"));
+const schedules_routes_1 = __importDefault(require("./schedules/schedules.routes"));
+const reviews_routes_1 = __importDefault(require("./reviews/reviews.routes"));
+const favorites_routes_1 = __importDefault(require("./favorites/favorites.routes"));
+const router = (0, express_1.Router)();
+router.use('/auth', auth_routes_1.default);
+router.use('/users', users_routes_1.default);
+router.use('/businesses', businesses_routes_1.default);
+router.use('/appointments', appointments_routes_1.default);
+router.use('/services', services_routes_1.default);
+router.use('/schedules', schedules_routes_1.default);
+router.use('/reviews', reviews_routes_1.default);
+router.use('/favorites', favorites_routes_1.default);
+exports.default = router;

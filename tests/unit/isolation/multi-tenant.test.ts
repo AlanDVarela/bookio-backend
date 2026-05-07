@@ -25,6 +25,7 @@ jest.mock('../../../src/database/prisma', () => ({
     },
     appointment: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
@@ -35,8 +36,8 @@ jest.mock('../../../src/database/prisma', () => ({
   },
 }));
 
-jest.mock('../../../src/app/middlewares/sns.service', () => ({
-  publishEvent: jest.fn().mockResolvedValue(undefined),
+jest.mock('../../../src/services/queue.service', () => ({
+  publishAppointmentEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { prisma } from '../../../src/database/prisma';
