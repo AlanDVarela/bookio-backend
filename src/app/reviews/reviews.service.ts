@@ -1,5 +1,4 @@
 import { prisma } from '../../database/prisma';
-import { publishEvent } from '../middlewares/sns.service';
 
 export class ReviewsService {
   /**
@@ -48,15 +47,6 @@ export class ReviewsService {
       });
 
       return { review: newReview, business: updatedBusiness };
-    });
-
-    // 2. Notificar vía SNS sobre la nueva reseña
-    await publishEvent('ReviewCreated', {
-      reviewId: result.review.id,
-      businessId: result.review.business_id,
-      clientId: result.review.client_id,
-      score: result.review.score,
-      appointmentId: result.review.appointment_id
     });
 
     return result;

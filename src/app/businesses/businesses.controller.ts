@@ -330,12 +330,9 @@ export class BusinessesController {
         longitude: longitude ? parseFloat(longitude) : undefined,
       });
 
-      return res.status(200).json({ 
-        message: 'Business updated successfully', 
-        business: {
-          ...updated,
-          phone: phone || req.user?.phone
-        } 
+      return res.status(200).json({
+        message: 'Business updated successfully',
+        business: updated,
       });
     } catch (error) {
       console.error(error);

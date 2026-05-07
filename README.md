@@ -32,13 +32,60 @@ Actualmente, muchas Pequeñas y Medianas Empresas (PyMEs) del sector servicios (
 ---
 
 ## 🏗️ Arquitectura en AWS
-El proyecto está diseñado sobre una arquitectura en la nube utilizando los siguientes 5 servicios principales de AWS:
 
-1. **Amazon EC2 (Cómputo):** Alojamiento de nuestra API RESTful (Node.js/Express) bajo entorno Linux.
-2. **Amazon RDS - PostgreSQL (Base de Datos):** Implementación del modelo relacional Multi-tenant, garantizando transacciones ACID a través de Prisma ORM.
-3. **Amazon S3 (Almacenamiento):** Uso dual para alojamiento del *Static Website* (Frontend SPA) y repositorio para recursos estáticos del negocio (imágenes/logotipos).
-4. **Amazon SNS (Mensajería):** Arquitectura orientada a eventos para el envío asíncrono de correos transaccionales (confirmaciones de citas).
-5. **AWS Secrets Manager (Seguridad):** Inyección segura de variables de entorno y credenciales hacia nuestras instancias EC2.
+El proyecto está desplegado sobre una arquitectura en la nube con los siguientes servicios:
+
+| Servicio | Tier | Rol |
+|---|---|---|
+| **EC2 t3.micro** | Cómputo | API REST Node.js/Express con `LabInstanceProfile` (sin credenciales hardcodeadas) |
+| **RDS db.t3.micro** | Base de Datos | PostgreSQL 16 — modelo relacional Multi-tenant, transacciones ACID vía Prisma ORM |
+| **S3** | Almacenamiento | `bookio-static-website` → Frontend Angular SPA · `bookio-assets-bucket` → logos/fotos |
+| **SQS** | Cola de mensajes | `bookio-appointments-queue` — desacopla creación de citas del envío de correos |
+| **Secrets Manager** | Seguridad | Credenciales DB, Firebase y SMTP: el EC2 las lee vía `LabInstanceProfile` sin tocar el código |
+
+### Flujo de Notificaciones (SQS + Nodemailer)
+
+```
+Cliente                EC2 (Express)           SQS Queue            SQS Worker (EC2)         Gmail SMTP
+  │                        │                       │                       │                      │
+  │── POST /appointments ──▶│                       │                       │                      │
+  │                        │── INSERT DB ──────────▶DB                      │                      │
+  │                        │── SendMessage ────────▶│                       │                      │
+  │◀─── 201 Created ───────│                       │                       │                      │
+  │                        │                       │── ReceiveMessage ─────▶│                      │
+  │                        │                       │                       │── sendMail ──────────▶│
+  │                        │                       │                       │◀─── OK ───────────────│
+  │                        │                       │◀─ DeleteMessage ───────│                      │
+```
+
+> El **SQS Worker** corre dentro del mismo proceso Express (`src/workers/sqs.worker.ts`) usando **long polling** (20 s), lo que mantiene el costo de SQS en cero (free tier: 1 M requests/mes). Los correos se envían con **Nodemailer + Gmail SMTP** por el puerto 587 (abierto en EC2).
+
+### Gestión de Credenciales — Learner's Lab
+
+El mayor desafío del Learner's Lab es que las credenciales temporales **expiran cada ~4 horas**. La solución:
+
+| Contexto | Solución |
+|---|---|
+| **Local / scripts** | `bash scripts/update_credentials.sh` al inicio de cada sesión |
+| **EC2 en producción** | `LabInstanceProfile` inyecta credenciales automáticamente via instance metadata — **no rota, no expira en la instancia** |
+
+Esto significa que el backend puede quedarse corriendo 24/7 sin que importe que cambien las credenciales del Lab.
+
+### Estimación de Costos (us-east-1)
+
+| Recurso | Precio/hr | 24h/7d |
+|---|---|---|
+| EC2 t3.micro | $0.0104 | $1.75/sem | $
+| RDS db.t3.micro | $0.017 | $2.86/sem 
+| Secrets Manager (3 secrets) | — | $0.28/sem | 
+| S3, SQS, Nodemailer | — | ~$0.00 | 
+| **Total** | | **~$4.89/sem** | 
+
+> ```bash
+> bash scripts/stop_all.sh   # Detener al terminar de trabajar (~$0/hr)
+> bash scripts/start_all.sh  # Iniciar al empezar la sesión
+> ```
+> **Importante:** RDS solo puede estar detenida 7 días consecutivos. Después AWS la reinicia automáticamente.
 
 ### Diagramas Técnicos
 
@@ -73,47 +120,60 @@ El desarrollo se centra en 3 flujos principales enumerados:
 
 1. **Flujo 1 - Configuración del Tenant:** Validación y creación del espacio del negocio (Business/Service) almacenando recursos en S3 y RDS.
 2. **Flujo 2 - Motor de Reserva:** Manejo de concurrencia relacional estricta para registrar citas sin empalmes en el calendario (PostgreSQL).
-3. **Flujo 3 - Notificaciones por Eventos:** Desacoplamiento de procesos mediante la publicación asíncrona de eventos en Amazon SNS para correos de confirmación.
+3. **Flujo 3 - Notificaciones por Eventos:** Al crear/cambiar estado de una cita, se publica un mensaje en **Amazon SQS**. Un worker de long-polling consume la cola y envía correos transaccionales (confirmación/cancelación) con **Nodemailer + Gmail SMTP**.
 
 ---
 
 ## ⚙️ Cómo correr el proyecto (Local)
 
 ### Prerrequisitos
-* Node.js (v18 o superior)
-* PostgreSQL instalado localmente
-* Cuenta de AWS (para servicios administrados)
+* Node.js v20+
+* AWS CLI v2 + `jq` (`brew install awscli jq`)
+* Cuenta de AWS Academy Learner's Lab
 
-### Pasos de instalación
-1. Clona el repositorio:
+### Desarrollo local (Docker)
+
+1. Clona e instala:
    ```bash
    git clone https://github.com/AlanDVarela/bookio-backend
    cd bookio-backend
-   ```
-2. Instala las dependencias:
-   ```bash
    npm install
    ```
-
-3. Variables de entorno:
-   Crea un archivo `.env` basándote en el archivo `.env.example`. Asegúrate de colocar las llaves correctas de Firebase (`FIREBASE_PRIVATE_KEY`, etc.)
-
-4. Levanta la Base de Datos Local con Docker:
+2. Crea `.env` desde `.env.example` con tus credenciales de Firebase y SMTP.
+3. Levanta la DB local:
    ```bash
    docker-compose up -d
+   npx prisma generate && npx prisma db push && npx prisma db seed
    ```
-
-5. Sincroniza el esquema de base de datos y llénala de datos base (Seed):
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   npx prisma db seed
-   ```
-
-6. Inicia el servidor de desarrollo:
+4. Inicia el servidor:
    ```bash
    npm run dev
    ```
+
+### Despliegue en AWS (Learner's Lab)
+
+```bash
+# 1. Al inicio de CADA sesión del Lab — actualiza credenciales locales
+bash scripts/update_credentials.sh
+
+# 2. Primera vez — crea toda la infraestructura (~10 min)
+bash scripts/setup_aws.sh
+
+# 3. Actualiza el secret de Firebase con tus credenciales reales
+aws secretsmanager put-secret-value \
+  --secret-id bookio/firebase \
+  --secret-string '{"project_id":"...","client_email":"...","private_key":"..."}' \
+  --region us-east-1
+
+# 4. Ahorra dinero: detén cuando no uses, inicia cuando trabajes
+bash scripts/stop_all.sh    # ~$0/hr
+bash scripts/start_all.sh   # ~$0.027/hr
+
+# 5. Al terminar el proyecto — elimina todo
+bash scripts/cleanup_aws.sh
+```
+
+> **Nota Gmail App Password:** Ve a [myaccount.google.com](https://myaccount.google.com) → Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones. Genera una de 16 caracteres.
 
 ### 📁 Estructura del Proyecto
 
@@ -255,8 +315,9 @@ El proyecto cuenta con un set de middlewares especializados para inyectar lógic
 | **Control de Accesos (RBAC)** | `auth.middleware.ts: requireRole` | Actúa junto al verificador. Lee los roles de base de datos extraídos en `req.user` y bloquea u otorga acceso a clientes, dueños de negocios o admins. |
 | **Parser Multipart FormData** | `upload.middleware.ts: upload` | Configuración base en memoria (via Multer) para parsear correctamente *uploads* sin ensuciar los controladores. Permite transferencias directas. |
 | **AWS S3 Object Uploader** | `s3.service.ts` | Recibe Buffers desde el middleware multipart y mediante el AWS SDK v3 los sube asíncronamente al respectivo Bucket privado/público. Retorna URIs seguras. |
-| **AWS SNS Event Dispatcher** | `sns.service.ts` | Servicio global de notificaciones. Emplea Tópicos (Topics) de Amazon Simple Notification Service para disparar triggers a dispositivos móviles o endpoints paralelos de manera no bloqueante. |
-| **AWS Secrets Resolver** | `secretManager.service.ts` | Encripta peticiones en runtime que requieren claves API muy sensibles delegando la búsqueda a las bóvedas blindadas de Cloud en lugar de almacenarlas localmente. |
+| **Email Service (Nodemailer)** | `services/email.service.ts` | Envía correos transaccionales (confirmación/cancelación de citas) usando Gmail SMTP vía Nodemailer. El puerto 587 está abierto en EC2. |
+| **SQS Worker** | `workers/sqs.worker.ts` | Proceso de long-polling que consume la cola `bookio-appointments-queue`. Desacopla la escritura en DB del envío de email: la API responde al cliente sin bloquear por el correo. |
+| **AWS Secrets Resolver** | `secretManager.service.ts` | Inyecta credenciales (DB, Firebase, SMTP) desde Secrets Manager en runtime, sin variables hardcodeadas en el código ni en el sistema de archivos. |
 
 ---
 
