@@ -1,13 +1,20 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env.config';
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-  },
-});
+let _transporter: nodemailer.Transporter | undefined;
+
+const getTransporter = () => {
+  if (!_transporter) {
+    _transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: env.SMTP_USER,
+        pass: env.SMTP_PASS,
+      },
+    });
+  }
+  return _transporter;
+};
 
 export interface AppointmentEmailData {
   to: string;
@@ -173,7 +180,7 @@ export const sendAppointmentEmail = async (
     ? `Cita confirmada — ${data.businessName}`
     : `Cita cancelada — ${data.businessName}`;
 
-  await transporter.sendMail({
+  await getTransporter().sendMail({
     from: `Bookio <${env.SMTP_USER}>`,
     to: data.to,
     subject,
@@ -182,5 +189,5 @@ export const sendAppointmentEmail = async (
 };
 
 export const verifyEmailConnection = async () => {
-  await transporter.verify();
+  await getTransporter().verify();
 };
