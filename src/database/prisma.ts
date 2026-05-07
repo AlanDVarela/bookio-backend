@@ -6,7 +6,10 @@ import { PrismaPg } from '@prisma/adapter-pg';
 // no cuando se importa este módulo. Así loadSecretsIntoEnv() puede
 // inyectar DATABASE_URL antes de que Prisma lo lea.
 const createClient = () => {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 };
