@@ -16,8 +16,8 @@
 #   RDS db.t3.micro     — PostgreSQL 16
 #   S3                  — Verifica buckets existentes + static website
 #   SQS                 — Cola de citas (bookio-appointments-queue)
-#   SES                 — Email sender (modo sandbox)
-#   Secrets Manager     — Credenciales DB + Firebase
+#   Email               — Nodemailer + Gmail SMTP (sin SES)
+#   Secrets Manager     — Credenciales DB + Firebase + SMTP
 # =============================================================================
 
 set -euo pipefail
@@ -64,15 +64,34 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Leer .env del proyecto para extraer credenciales ya configuradas
+ENV_FILE="$(dirname "$0")/../.env"
+read_env_var() {
+  local var="$1"
+  grep -E "^${var}=" "$ENV_FILE" 2>/dev/null | head -1 | sed 's/^[^=]*=["'"'"']*//' | sed 's/["'"'"']*$//'
+}
+
+if [[ -z "$SMTP_USER" ]]; then
+  SMTP_USER=$(read_env_var "SMTP_USER")
+fi
 if [[ -z "$SMTP_USER" ]]; then
   echo -n "Correo Gmail para enviar notificaciones (ej: tuapp@gmail.com): "
   read -r SMTP_USER
+fi
+
+if [[ -z "$SMTP_PASS" ]]; then
+  SMTP_PASS=$(read_env_var "SMTP_PASS")
 fi
 if [[ -z "$SMTP_PASS" ]]; then
   echo -n "App Password de Gmail (16 chars, sin espacios): "
   read -rs SMTP_PASS
   echo ""
 fi
+
+# Leer credenciales Firebase desde .env
+FIREBASE_PROJECT_ID=$(read_env_var "FIREBASE_PROJECT_ID")
+FIREBASE_CLIENT_EMAIL=$(read_env_var "FIREBASE_CLIENT_EMAIL")
+FIREBASE_PRIVATE_KEY=$(read_env_var "FIREBASE_PRIVATE_KEY")
 
 # ─── Prerequisitos ───────────────────────────────────────────────────────────
 header "Verificando prerequisitos"
@@ -152,7 +171,7 @@ SG_EC2_ID=$(aws ec2 describe-security-groups \
 if [[ "$SG_EC2_ID" == "None" || -z "$SG_EC2_ID" ]]; then
   SG_EC2_ID=$(aws ec2 create-security-group \
     --group-name "$SG_EC2_NAME" \
-    --description "Bookio EC2 — SSH y API" \
+    --description "Bookio EC2 - SSH y API" \
     --vpc-id "$VPC_ID" \
     --query "GroupId" --output text --region "$REGION")
 
@@ -181,7 +200,7 @@ SG_RDS_ID=$(aws ec2 describe-security-groups \
 if [[ "$SG_RDS_ID" == "None" || -z "$SG_RDS_ID" ]]; then
   SG_RDS_ID=$(aws ec2 create-security-group \
     --group-name "$SG_RDS_NAME" \
-    --description "Bookio RDS — PostgreSQL solo desde EC2" \
+    --description "Bookio RDS - PostgreSQL solo desde EC2" \
     --vpc-id "$VPC_ID" \
     --query "GroupId" --output text --region "$REGION")
 
@@ -300,13 +319,17 @@ create_or_update_secret() {
 create_or_update_secret "$SECRET_DB" \
   "{\"url\":\"${DATABASE_URL}\",\"host\":\"${RDS_ENDPOINT}\",\"port\":\"5432\",\"database\":\"bookio\",\"username\":\"bookio_admin\",\"password\":\"${DB_PASS}\"}"
 
-# Secret Firebase — el usuario deberá actualizar esto con sus credenciales reales
-if ! aws secretsmanager describe-secret --secret-id "$SECRET_FIREBASE" --region "$REGION" &>/dev/null; then
-  create_or_update_secret "$SECRET_FIREBASE" \
-    "{\"project_id\":\"YOUR_FIREBASE_PROJECT_ID\",\"client_email\":\"YOUR_FIREBASE_CLIENT_EMAIL\",\"private_key\":\"YOUR_FIREBASE_PRIVATE_KEY\"}"
-  warn "Secret Firebase creado con placeholders. Actualiza '$SECRET_FIREBASE' con tus credenciales reales."
+# Secret Firebase — leído desde .env del proyecto
+if [[ -n "$FIREBASE_PROJECT_ID" && -n "$FIREBASE_CLIENT_EMAIL" && -n "$FIREBASE_PRIVATE_KEY" ]]; then
+  FIREBASE_JSON=$(jq -n \
+    --arg pid "$FIREBASE_PROJECT_ID" \
+    --arg email "$FIREBASE_CLIENT_EMAIL" \
+    --arg key "$FIREBASE_PRIVATE_KEY" \
+    '{"project_id":$pid,"client_email":$email,"private_key":$key}')
+  create_or_update_secret "$SECRET_FIREBASE" "$FIREBASE_JSON"
 else
-  log "Secret Firebase ya existe: $SECRET_FIREBASE"
+  warn "No se encontraron credenciales Firebase en .env. Crea el secret manualmente:"
+  warn "  aws secretsmanager put-secret-value --secret-id $SECRET_FIREBASE --secret-string '{...}'"
 fi
 
 # Secret SMTP — credenciales de Gmail para Nodemailer
@@ -448,7 +471,7 @@ APP_DIR=/home/ec2-user/bookio-backend
 mkdir -p \$APP_DIR
 
 # Clonar repositorio
-git clone ${REPO_URL} \$APP_DIR
+git clone --branch aws_infra ${REPO_URL} \$APP_DIR
 cd \$APP_DIR
 
 # Obtener secretos de Secrets Manager (usando LabRole del instance profile)
@@ -473,11 +496,13 @@ ENVFILE
 # Instalar dependencias
 npm ci
 
+# Generar cliente Prisma (debe ir antes del build para que tsc tenga los tipos)
+npx prisma generate
+
 # Compilar TypeScript
 npm run build
 
-# Prisma: requiere DATABASE_URL para el push, se pasa inline
-npx prisma generate
+# Migrar schema a RDS
 DATABASE_URL="\$DB_URL" npx prisma db push --accept-data-loss 2>/dev/null || true
 
 # Cambiar owner
@@ -582,12 +607,9 @@ echo -e "    From:         ${BOLD}$SMTP_USER${NC}"
 echo -e "    Pass secret:  Secrets Manager → ${BOLD}$SECRET_SMTP${NC}"
 echo ""
 echo -e "${YELLOW}IMPORTANTE — Próximos pasos:${NC}"
-echo -e "  1. Actualiza el secret Firebase en Secrets Manager:"
-echo -e "     ${BOLD}aws secretsmanager put-secret-value --secret-id bookio/firebase \\${NC}"
-echo -e "       ${BOLD}--secret-string '{\"project_id\":\"...\",\"client_email\":\"...\",\"private_key\":\"...\"}' --region $REGION${NC}"
-echo -e "  2. Verifica el correo en SES (revisa tu bandeja de entrada)"
-echo -e "  3. Logs del EC2: ${BOLD}ssh -i $KEY_FILE ec2-user@$EC2_PUBLIC_IP 'tail -f /var/log/bookio-init.log'${NC}"
-echo -e "  4. Actualiza CORS en src/index.ts con la IP: ${BOLD}http://$EC2_PUBLIC_IP:3000${NC}"
+echo -e "  1. Logs del EC2 (init puede tardar ~3 min): ${BOLD}ssh -i $KEY_FILE ec2-user@$EC2_PUBLIC_IP 'tail -f /var/log/bookio-init.log'${NC}"
+echo -e "  2. Verifica CORS en src/index.ts — origen permitido:"
+echo -e "     ${BOLD}http://${S3_WEBSITE_BUCKET}.s3-website-${REGION}.amazonaws.com${NC}"
 echo ""
 echo -e "${YELLOW}AHORRO DE COSTOS:${NC}"
 echo -e "  Detener todo:  ${BOLD}bash scripts/stop_all.sh${NC}"
