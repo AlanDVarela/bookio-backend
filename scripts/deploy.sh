@@ -24,26 +24,16 @@ EC2_USER="ec2-user"
 SSH_KEY=""
 REMOTE_DIR="/home/ec2-user/bookio-backend"
 APP_NAME="bookio-backend"
+SKIP_BUILD=false
 
 # ─── Parseo de argumentos ───────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --host)
-      EC2_HOST="$2"
-      shift 2
-      ;;
-    --user)
-      EC2_USER="$2"
-      shift 2
-      ;;
-    --key)
-      SSH_KEY="$2"
-      shift 2
-      ;;
-    --remote-dir)
-      REMOTE_DIR="$2"
-      shift 2
-      ;;
+    --host)       EC2_HOST="$2";    shift 2 ;;
+    --user)       EC2_USER="$2";    shift 2 ;;
+    --key)        SSH_KEY="$2";     shift 2 ;;
+    --remote-dir) REMOTE_DIR="$2";  shift 2 ;;
+    --skip-build) SKIP_BUILD=true;  shift   ;;
     *)
       echo -e "${RED}❌ Argumento desconocido: $1${NC}"
       exit 1
@@ -71,8 +61,13 @@ SSH_CMD="ssh -i $SSH_KEY -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST"
 SCP_CMD="scp -i $SSH_KEY -o StrictHostKeyChecking=no"
 
 # ─── Step 1: Build local ────────────────────────────────────────────────────
-echo -e "${YELLOW}🏗️  [1/5] Compilando proyecto localmente...${NC}"
-npm run build
+if [[ "$SKIP_BUILD" == "false" ]]; then
+  echo -e "${YELLOW}[1/5] Compilando proyecto localmente...${NC}"
+  npx prisma generate
+  npm run build
+else
+  echo -e "${YELLOW}[1/5] Build omitido (--skip-build)${NC}"
+fi
 
 # ─── Step 2: Transferir archivos ─────────────────────────────────────────────
 echo -e "${YELLOW}📤 [2/5] Transfiriendo archivos a EC2 ($EC2_HOST)...${NC}"
@@ -98,7 +93,7 @@ $SSH_CMD "cd $REMOTE_DIR && npx prisma generate && npx prisma db push --accept-d
 
 # ─── Step 5: Reiniciar la aplicación ─────────────────────────────────────────
 echo -e "${YELLOW}🔄 [5/5] Reiniciando aplicación con PM2...${NC}"
-$SSH_CMD "cd $REMOTE_DIR && pm2 restart $APP_NAME || pm2 start dist/index.js --name $APP_NAME"
+$SSH_CMD "cd $REMOTE_DIR && pm2 restart $APP_NAME || pm2 start dist/src/index.js --name $APP_NAME"
 
 echo -e "${GREEN}✅ Deploy completado exitosamente en $EC2_HOST${NC}"
 echo -e "${GREEN}   App: $APP_NAME | Dir: $REMOTE_DIR${NC}"
