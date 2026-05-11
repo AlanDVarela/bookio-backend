@@ -33,20 +33,19 @@ jobs:
       - name: Validar build exitoso
         run: |
           echo "Build completado exitosamente."
-          echo "Artefactos generados en ./dist"
-          ls -la dist/ || echo "Directorio dist no encontrado (verificar tsconfig.outDir)"
+          ls -la dist/src/ || echo "Directorio dist/src no encontrado"
 
-      # ─── Deploy a EC2 (Descomentar cuando el servidor esté disponible) ────
-      # - name: Configurar SSH Key
-      #   run: |
-      #     mkdir -p ~/.ssh
-      #     echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/bookio-key.pem
-      #     chmod 600 ~/.ssh/bookio-key.pem
-      #     ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+      - name: Configurar SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/bookio-key.pem
+          chmod 600 ~/.ssh/bookio-key.pem
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      # - name: 🚀 Deploy via SSH
-      #   run: |
-      #     bash scripts/deploy.sh \
-      #       --host ${{ secrets.EC2_HOST }} \
-      #       --user ${{ secrets.EC2_USER }} \
-      #       --key ~/.ssh/bookio-key.pem
+      - name: Deploy via SSH
+        run: |
+          bash scripts/deploy.sh \
+            --host ${{ secrets.EC2_HOST }} \
+            --user ec2-user \
+            --key ~/.ssh/bookio-key.pem \
+            --skip-build
