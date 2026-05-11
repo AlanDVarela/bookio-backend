@@ -6,6 +6,7 @@ import { env } from './config/env.config';
 import globalRouter from './app/routes';
 import { prisma } from './database/prisma';
 import { startSQSWorker } from './workers/sqs.worker';
+import { metricsMiddleware } from './app/middlewares/metrics.middleware';
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(metricsMiddleware);
 app.use('/api/v1', globalRouter);
 
 app.get('/health', (_req, res) => {

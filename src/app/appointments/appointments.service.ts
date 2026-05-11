@@ -1,5 +1,6 @@
 import { prisma } from '../../database/prisma';
 import { publishAppointmentEvent } from '../../services/queue.service';
+import { trackAppointmentCreated } from '../../services/metrics.service';
 import { Prisma } from '@prisma/client';
 
 export class AppointmentsService {
@@ -171,6 +172,8 @@ export class AppointmentsService {
         service:  { select: { name: true, duration_minutes: true } },
       },
     });
+
+    trackAppointmentCreated();
 
     if (forEmail?.client?.email) {
       await publishAppointmentEvent({
