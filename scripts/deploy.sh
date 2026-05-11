@@ -70,22 +70,30 @@ else
 fi
 
 # ─── Step 2: Transferir archivos ─────────────────────────────────────────────
-echo -e "${YELLOW}📤 [2/5] Transfiriendo archivos a EC2 ($EC2_HOST)...${NC}"
-$SSH_CMD "mkdir -p $REMOTE_DIR"
+echo -e "${YELLOW}[2/5] Transfiriendo archivos a EC2 ($EC2_HOST)...${NC}"
+$SSH_CMD "mkdir -p $REMOTE_DIR/dist $REMOTE_DIR/prisma"
 
-# Sincronizar archivos necesarios
-rsync -avz --delete \
+# dist/ → REMOTE_DIR/dist/  (compilado)
+rsync -az --delete \
   -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
-  --exclude 'node_modules' \
-  --exclude '.git' \
-  --exclude '.env' \
-  --exclude 'tests' \
-  dist/ package.json package-lock.json prisma/ \
+  dist/ \
+  "$EC2_USER@$EC2_HOST:$REMOTE_DIR/dist/"
+
+# prisma/ → REMOTE_DIR/prisma/  (schema y migraciones)
+rsync -az --delete \
+  -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+  prisma/ \
+  "$EC2_USER@$EC2_HOST:$REMOTE_DIR/prisma/"
+
+# package files
+rsync -az \
+  -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+  package.json package-lock.json \
   "$EC2_USER@$EC2_HOST:$REMOTE_DIR/"
 
 # ─── Step 3: Instalar dependencias en remoto ─────────────────────────────────
-echo -e "${YELLOW}📦 [3/5] Instalando dependencias en producción...${NC}"
-$SSH_CMD "cd $REMOTE_DIR && npm ci --omit=dev"
+echo -e "${YELLOW}[3/5] Instalando dependencias en producción...${NC}"
+$SSH_CMD "cd $REMOTE_DIR && HUSKY=0 npm ci --omit=dev"
 
 # ─── Step 4: Ejecutar migraciones de Prisma ──────────────────────────────────
 echo -e "${YELLOW}🗄️  [4/5] Sincronizando esquema de base de datos...${NC}"
