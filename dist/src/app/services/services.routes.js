@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const services_controller_1 = require("./services.controller");
+const auth_middleware_1 = require("../middlewares/auth.middleware");
+const upload_middleware_1 = require("../middlewares/upload.middleware");
+const router = (0, express_1.Router)();
+const controller = new services_controller_1.ServicesController();
+const auth = [auth_middleware_1.authenticateJWT, (0, auth_middleware_1.requireRole)('BUSINESS_OWNER')];
+router.get('/', ...auth, controller.getOwnServices);
+router.post('/', ...auth, controller.createService);
+router.put('/:id', ...auth, controller.updateService);
+router.get('/:id/schedule', ...auth, controller.getServiceSchedule);
+router.put('/:id/schedule', ...auth, controller.upsertServiceScheduleDay);
+router.delete('/:id/schedule/:dayId', ...auth, controller.removeServiceScheduleDay);
+router.patch('/:id/photo', ...auth, upload_middleware_1.uploadSettings.single('photo'), controller.uploadPhoto);
+exports.default = router;

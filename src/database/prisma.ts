@@ -2,10 +2,24 @@ import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-// Using local process.env.DATABASE_URL or default to a dummy string to avoid crashing immediately in test without env setup.
-const url = process.env.DATABASE_URL;
+// Lazy initialization: el cliente se crea la primera vez que se usa,
+// no cuando se importa este módulo. Así loadSecretsIntoEnv() puede
+// inyectar DATABASE_URL antes de que Prisma lo lea.
+const createClient = () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  });
+  const adapter = new PrismaPg(pool);
+  return new PrismaClient({ adapter });
+};
 
-const pool = new Pool({ connectionString: url });
-const adapter = new PrismaPg(pool);
+let _instance: PrismaClient | undefined;
 
-export const prisma = new PrismaClient({ adapter });
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop: string | symbol) {
+    if (!_instance) _instance = createClient();
+    const value = (_instance as any)[prop];
+    return typeof value === 'function' ? value.bind(_instance) : value;
+  },
+});

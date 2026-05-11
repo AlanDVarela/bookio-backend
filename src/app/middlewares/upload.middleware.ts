@@ -5,10 +5,27 @@ import multer from 'multer';
 const storage = multer.memoryStorage();
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  if (file.mimetype.startsWith('image/')) {
+  let isImage = file.mimetype.startsWith('image/');
+
+  // Si el cliente no envió el Content-Type correcto, suele llegar como application/octet-stream.
+  // En ese caso, verificamos la extensión del archivo original.
+  if (!isImage && file.mimetype === 'application/octet-stream') {
+    const ext = file.originalname.toLowerCase();
+    if (ext.match(/\.(jpg|jpeg|png|gif|webp|heic|heif)$/)) {
+      isImage = true;
+      // Corregimos el mimetype para que cuando se suba a S3, el navegador sepa que es una imagen
+      if (ext.endsWith('.png')) file.mimetype = 'image/png';
+      else if (ext.endsWith('.webp')) file.mimetype = 'image/webp';
+      else if (ext.endsWith('.gif')) file.mimetype = 'image/gif';
+      else file.mimetype = 'image/jpeg'; // fallback seguro para jpg/heic
+    }
+  }
+
+  if (isImage) {
     cb(null, true);
   } else {
-    cb(new Error('Formato no soportado. Sólo imágenes son válidas.'));
+    console.error(`[Upload Error]: Mimetype no soportado: ${file.mimetype} (Archivo: ${file.originalname})`);
+    cb(new Error(`Formato no soportado (${file.mimetype}). Sólo imágenes son válidas.`));
   }
 };
 

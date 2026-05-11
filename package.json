@@ -7,7 +7,15 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --config jest.config.ts",
+    "lint": "eslint src/ tests/",
+    "lint:fix": "eslint src/ tests/ --fix",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "eslint --fix"
+    ]
   },
   "repository": {
     "type": "git",
@@ -27,7 +35,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1030.0",
     "@aws-sdk/client-secrets-manager": "^3.1030.0",
-    "@aws-sdk/client-sns": "^3.1030.0",
+    "@aws-sdk/client-sqs": "^3.1030.0",
+    "nodemailer": "^6.10.1",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "cors": "^2.8.6",
@@ -48,14 +57,19 @@
     "@types/jest": "^30.0.0",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.1.0",
+    "@types/nodemailer": "^6.4.17",
     "@types/node": "^25.6.0",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.0",
+    "eslint": "^10.2.1",
+    "husky": "^9.1.7",
     "jest": "^30.3.0",
+    "lint-staged": "^16.4.0",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.2"
   }
 }

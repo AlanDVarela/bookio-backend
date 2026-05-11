@@ -6,7 +6,7 @@ export class BusinessesService {
   public async registerBusiness(data: {
     ownerId: string;
     name: string;
-    type: 'BARBERSHOP' | 'SPA' | 'SALON' | 'OTHER';
+    type: BusinessType;
     address: string;
     latitude?: number;
     longitude?: number;
@@ -120,6 +120,25 @@ export class BusinessesService {
           where: { start_time: null }, // solo bloqueos de día completo
           select: { date: true },
         },
+      },
+    });
+  }
+
+  public async updateBusiness(id: string, data: {
+    name?: string;
+    type?: BusinessType;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+  }) {
+    return prisma.business.update({
+      where: { id },
+      data: {
+        name: data.name,
+        type: data.type,
+        address: data.address,
+        latitude: data.latitude,
+        longitude: data.longitude,
       },
     });
   }

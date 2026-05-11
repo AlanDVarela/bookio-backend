@@ -20,7 +20,7 @@ export class AuthController {
     }
 
     try {
-      const decoded = await admin.auth().verifyIdToken(idToken);
+      const decoded = await admin().auth().verifyIdToken(idToken);
 
       const { user, created } = await authService.registerUser({
         firebaseUid: decoded.uid,

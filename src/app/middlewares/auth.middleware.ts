@@ -27,7 +27,7 @@ export const authenticateJWT = async (
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = await admin.auth().verifyIdToken(token);
+    const decoded = await admin().auth().verifyIdToken(token);
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.uid },

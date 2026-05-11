@@ -4,6 +4,39 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 
 export class SchedulesController {
 
+  // GET /schedules/business/:businessId — horario público de un negocio
+public async getByBusiness(req: Request, res: Response) {
+  try {
+    const businessId = req.params.businessId as string;
+    
+    // LOG 1: Verificar si el ID llega correctamente desde la URL
+    console.log("--- Debug Schedules ---");
+    console.log("Buscando para Business ID:", businessId);
+
+    const [schedules, blockedSlots] = await Promise.all([
+      prisma.schedule.findMany({
+        where: { business_id: businessId },
+        orderBy: { day_of_week: 'asc' },
+      }),
+      prisma.blockedSlot.findMany({
+        where: { business_id: businessId },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
+
+    // LOG 2: Verificar qué devolvió la base de datos
+    console.log("Horarios encontrados:", schedules.length);
+    console.log("Bloqueos encontrados:", blockedSlots.length);
+    console.log("-----------------------");
+
+    return res.status(200).json({ schedules, blockedSlots });
+  } catch (error) {
+    // LOG 3: Ver el error real si algo explota
+    console.error("ERROR en getByBusiness:", error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
   // GET /schedules — horario semanal + bloqueos del negocio autenticado
   public async getMine(req: AuthenticatedRequest, res: Response) {
     try {

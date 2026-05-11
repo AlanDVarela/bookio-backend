@@ -1,5 +1,6 @@
 import { prisma } from '../../database/prisma';
-import { publishEvent } from '../middlewares/sns.service';
+import { publishAppointmentEvent } from '../../services/queue.service';
+import { Prisma } from '@prisma/client';
 
 export class AppointmentsService {
   /**
@@ -148,10 +149,84 @@ export class AppointmentsService {
         throw new Error('Conflict: Time slot is already booked.');
       }
 
-      const newAppointment = await tx.appointment.create({
+      return tx.appointment.create({
         data: {
           business_id: data.businessId,
           client_id: data.clientId,
+          service_id: data.serviceId,
+          start_datetime: data.startDatetime,
+          end_datetime: data.endDatetime,
+          status: 'CONFIRMED',
+        },
+      });
+    });
+
+    // Query separada para el correo (fuera de la transacción)
+    const forEmail = await prisma.appointment.findUnique({
+      where: { id: appointment.id },
+      select: {
+        start_datetime: true,
+        client:   { select: { name: true, email: true } },
+        business: { select: { name: true, logo_url: true } },
+        service:  { select: { name: true, duration_minutes: true } },
+      },
+    });
+
+    if (forEmail?.client?.email) {
+      await publishAppointmentEvent({
+        appointmentId:   appointment.id,
+        to:              forEmail.client.email,
+        clientName:      forEmail.client.name,
+        businessName:    forEmail.business.name,
+        serviceName:     forEmail.service.name,
+        datetime:        forEmail.start_datetime.toISOString(),
+        status:          'CONFIRMED',
+        durationMinutes: forEmail.service.duration_minutes ?? undefined,
+        logoUrl:         forEmail.business.logo_url ?? undefined,
+      });
+    }
+
+    return appointment;
+  }
+
+  /**
+   * Crea una reservación manual (Walk-in) sin asociarla a un usuario registrado de Firebase.
+   */
+  public async createManualAppointment(data: {
+    businessId: string;
+    clientName: string;
+    clientPhone?: string;
+    serviceId: string;
+    startDatetime: Date;
+    endDatetime: Date;
+  }) {
+    if (data.startDatetime <= new Date()) {
+      throw new Error('Past: Cannot book a slot that has already passed.');
+    }
+
+    const appointment = await prisma.$transaction(async (tx) => {
+      const overlapping = await tx.appointment.findFirst({
+        where: {
+          business_id: data.businessId,
+          status: { in: ['CONFIRMED', 'PENDING'] },
+          OR: [
+            {
+              start_datetime: { lt: data.endDatetime },
+              end_datetime: { gt: data.startDatetime },
+            },
+          ],
+        },
+      });
+
+      if (overlapping) {
+        throw new Error('Conflict: Time slot is already booked.');
+      }
+
+      const newAppointment = await tx.appointment.create({
+        data: {
+          business_id: data.businessId,
+          client_name: data.clientName,
+          client_phone: data.clientPhone,
           service_id: data.serviceId,
           start_datetime: data.startDatetime,
           end_datetime: data.endDatetime,
@@ -162,17 +237,26 @@ export class AppointmentsService {
       return newAppointment;
     });
 
-    await publishEvent('AppointmentConfirmed', {
-      appointmentId: appointment.id,
-      businessId: appointment.business_id,
-      clientId: appointment.client_id,
-      startDatetime: appointment.start_datetime,
-    });
-
     return appointment;
   }
 
+  /**
+   * Auto-completa las citas que ya pasaron su tiempo de término y estaban en curso.
+   */
+  public async autoUpdateStatuses() {
+    const now = new Date();
+    await prisma.appointment.updateMany({
+      where: {
+        status: 'IN_PROGRESS',
+        end_datetime: { lt: now }
+      },
+      data: { status: 'COMPLETED' }
+    });
+  }
+
   public async getAppointmentsByFilter(filters: { businessId?: string; clientId?: string }) {
+    await this.autoUpdateStatuses();
+    
     const whereClause: any = {};
     if (filters.businessId) whereClause.business_id = filters.businessId;
     if (filters.clientId) whereClause.client_id = filters.clientId;
@@ -187,11 +271,39 @@ export class AppointmentsService {
     });
   }
 
-  public async updateAppointmentStatus(id: string, status: 'PENDING' | 'CONFIRMED' | 'CANCELLED') {
-    return prisma.appointment.update({
+  public async updateAppointmentStatus(id: string, status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'IN_PROGRESS' | 'COMPLETED') {
+    const appointment = await prisma.appointment.update({
       where: { id },
       data: { status },
     });
+
+    if (status === 'CANCELLED') {
+      const forEmail = await prisma.appointment.findUnique({
+        where: { id },
+        select: {
+          start_datetime: true,
+          client:   { select: { name: true, email: true } },
+          business: { select: { name: true, logo_url: true } },
+          service:  { select: { name: true, duration_minutes: true } },
+        },
+      });
+
+      if (forEmail?.client?.email) {
+        await publishAppointmentEvent({
+          appointmentId:   appointment.id,
+          to:              forEmail.client.email,
+          clientName:      forEmail.client.name,
+          businessName:    forEmail.business.name,
+          serviceName:     forEmail.service.name,
+          datetime:        forEmail.start_datetime.toISOString(),
+          status:          'CANCELLED',
+          durationMinutes: forEmail.service.duration_minutes ?? undefined,
+          logoUrl:         forEmail.business.logo_url ?? undefined,
+        });
+      }
+    }
+
+    return appointment;
   }
 
   public async deleteAppointment(id: string) {
