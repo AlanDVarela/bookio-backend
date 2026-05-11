@@ -1,4 +1,5 @@
 import { prisma } from '../../database/prisma';
+import { trackUserRegistered } from '../../services/metrics.service';
 
 interface RegisterUserParams {
   firebaseUid: string;
@@ -36,6 +37,7 @@ export class AuthService {
       },
     });
 
+    trackUserRegistered();
     return { user, created: true };
   }
 

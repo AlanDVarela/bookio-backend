@@ -4,7 +4,7 @@
 # Compatible con AWS Academy Learner's Lab (us-east-1)
 #
 # USO:
-#   bash scripts/setup_aws.sh [--email tu@correo.com] [--repo-url https://...]
+#   bash scripts/setup_aws.sh 
 #
 # REQUISITOS:
 #   - AWS CLI v2 configurado con credenciales del Learner's Lab
@@ -145,7 +145,7 @@ log "Subnets: $SUBNET_1 | $SUBNET_2"
 # ─── Key Pair ─────────────────────────────────────────────────────────────────
 header "Key Pair SSH"
 
-KEY_FILE="$HOME/.ssh/${KEY_NAME}.pem"
+KEY_FILE="$(dirname "$0")/../keys/${KEY_NAME}.pem"
 
 if aws ec2 describe-key-pairs --key-names "$KEY_NAME" --region "$REGION" &>/dev/null; then
   warn "Key pair '$KEY_NAME' ya existe. Si no tienes el .pem, bórralo primero con cleanup."
@@ -376,7 +376,25 @@ header "S3 Buckets"
 # Verificar bucket de assets
 if aws s3api head-bucket --bucket "$S3_ASSETS_BUCKET" 2>/dev/null; then
   log "Assets bucket existe: $S3_ASSETS_BUCKET"
-  # Asegurar CORS para uploads del backend
+  # Deshabilitar BlockPublicAccess para permitir lectura pública de assets
+  aws s3api put-public-access-block \
+    --bucket "$S3_ASSETS_BUCKET" \
+    --public-access-block-configuration \
+      "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false" \
+    2>/dev/null || true
+  # Política pública de lectura para logos e imágenes
+  aws s3api put-bucket-policy \
+    --bucket "$S3_ASSETS_BUCKET" \
+    --policy "{
+      \"Version\": \"2012-10-17\",
+      \"Statement\": [{
+        \"Effect\": \"Allow\",
+        \"Principal\": \"*\",
+        \"Action\": \"s3:GetObject\",
+        \"Resource\": \"arn:aws:s3:::${S3_ASSETS_BUCKET}/*\"
+      }]
+    }" 2>/dev/null || true
+  # CORS para uploads del backend
   aws s3api put-bucket-cors \
     --bucket "$S3_ASSETS_BUCKET" \
     --cors-configuration '{
@@ -399,6 +417,13 @@ if aws s3api head-bucket --bucket "$S3_WEBSITE_BUCKET" 2>/dev/null; then
     --index-document index.html \
     --error-document index.html 2>/dev/null || true
 
+  # Deshabilitar BlockPublicAccess antes de aplicar política pública
+  aws s3api put-public-access-block \
+    --bucket "$S3_WEBSITE_BUCKET" \
+    --public-access-block-configuration \
+      "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false" \
+    2>/dev/null || true
+
   # Public read policy
   aws s3api put-bucket-policy \
     --bucket "$S3_WEBSITE_BUCKET" \
@@ -411,10 +436,6 @@ if aws s3api head-bucket --bucket "$S3_WEBSITE_BUCKET" 2>/dev/null; then
         \"Resource\": \"arn:aws:s3:::${S3_WEBSITE_BUCKET}/*\"
       }]
     }" 2>/dev/null || true
-
-  aws s3api put-bucket-acl \
-    --bucket "$S3_WEBSITE_BUCKET" \
-    --acl public-read 2>/dev/null || warn "No se pudo poner public-read ACL en website bucket (puede ser normal)"
 
   log "Static website URL: http://${S3_WEBSITE_BUCKET}.s3-website-${REGION}.amazonaws.com"
 else
@@ -471,7 +492,7 @@ APP_DIR=/home/ec2-user/bookio-backend
 mkdir -p \$APP_DIR
 
 # Clonar repositorio
-git clone --branch aws_infra ${REPO_URL} \$APP_DIR
+git clone --branch main ${REPO_URL} \$APP_DIR
 cd \$APP_DIR
 
 # Obtener secretos de Secrets Manager (usando LabRole del instance profile)
@@ -509,7 +530,7 @@ DATABASE_URL="\$DB_URL" npx prisma db push --accept-data-loss 2>/dev/null || tru
 chown -R ec2-user:ec2-user \$APP_DIR
 
 # Iniciar con PM2
-sudo -u ec2-user pm2 start \$APP_DIR/dist/index.js --name bookio-backend
+sudo -u ec2-user pm2 start \$APP_DIR/dist/src/index.js --name bookio-backend
 sudo -u ec2-user pm2 startup systemd -u ec2-user --hp /home/ec2-user 2>/dev/null || true
 sudo -u ec2-user pm2 save
 

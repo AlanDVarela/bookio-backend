@@ -7,3 +7,6 @@ node_modules
 
 bookio_local.sql
 bookio_data.sql
+keys/
+scripts/.aws_resources
+keys/
