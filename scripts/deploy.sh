@@ -95,14 +95,9 @@ rsync -az \
 echo -e "${YELLOW}[3/5] Instalando dependencias en producción...${NC}"
 $SSH_CMD "cd $REMOTE_DIR && HUSKY=0 npm ci --omit=dev"
 
-# ─── Step 4: Ejecutar migraciones de Prisma ──────────────────────────────────
-echo -e "${YELLOW}[4/5] Sincronizando esquema de base de datos...${NC}"
-$SSH_CMD "cd $REMOTE_DIR && \
-  DB_URL=\$(aws secretsmanager get-secret-value \
-    --secret-id bookio/db --region us-east-1 \
-    --query SecretString --output text | \
-    python3 -c \"import sys,json; print(json.load(sys.stdin)['url'])\") && \
-  DATABASE_URL=\"\$DB_URL\" npx prisma db push --accept-data-loss"
+# ─── Step 4: Generar cliente Prisma ──────────────────────────────────────────
+echo -e "${YELLOW}[4/5] Generando cliente Prisma...${NC}"
+$SSH_CMD "cd $REMOTE_DIR && npx prisma generate"
 
 # ─── Step 5: Reiniciar la aplicación ─────────────────────────────────────────
 echo -e "${YELLOW}🔄 [5/5] Reiniciando aplicación con PM2...${NC}"
