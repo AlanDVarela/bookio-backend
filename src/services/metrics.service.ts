@@ -27,13 +27,13 @@ const publish = (
 };
 
 export const trackRequest = (route: string, method: string, statusCode: number, durationMs: number) => {
-  publish('Bookio/API', 'RequestCount', 1, StandardUnit.Count, { Route: route, Method: method });
-  publish('Bookio/API', 'ResponseTime', durationMs, StandardUnit.Milliseconds, { Route: route });
+  publish('Bookio/API', 'RequestCount', 1, StandardUnit.Count);
+  publish('Bookio/API', 'ResponseTime', durationMs, StandardUnit.Milliseconds);
 
   if (statusCode >= 400 && statusCode < 500) {
-    publish('Bookio/API', 'Error4xx', 1, StandardUnit.Count, { Route: route });
+    publish('Bookio/API', 'Error4xx', 1, StandardUnit.Count);
   } else if (statusCode >= 500) {
-    publish('Bookio/API', 'Error5xx', 1, StandardUnit.Count, { Route: route });
+    publish('Bookio/API', 'Error5xx', 1, StandardUnit.Count);
   }
 };
 
