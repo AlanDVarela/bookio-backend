@@ -75,6 +75,16 @@ else
   log "SSH ya permite tu IP: ${MY_IP}/32"
 fi
 
+# ─── 5. Actualizar secret EC2_HOST en GitHub (para el CD) ────────────────────
+info "Actualizando secret EC2_HOST en GitHub..."
+if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
+  gh secret set EC2_HOST --body "$NEW_IP" --repo AlanDVarela/bookio-backend
+  log "GitHub secret EC2_HOST actualizado a: $NEW_IP"
+else
+  warn "gh CLI no disponible o no autenticado. Actualiza manualmente:"
+  warn "  gh secret set EC2_HOST --body \"$NEW_IP\""
+fi
+
 # ─── Resumen ──────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

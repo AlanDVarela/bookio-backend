@@ -19,19 +19,19 @@ Esta plataforma cuenta con una arquitectura desacoplada. Explora nuestros difere
 
 ---
 
-## 📖 Descripción del Proyecto
+## Descripción del Proyecto
 Actualmente, muchas Pequeñas y Medianas Empresas (PyMEs) del sector servicios (barberías, spas, consultorios) gestionan sus citas de manera manual. Esto ocasiona problemas críticos como el empalme de horarios (*overbooking*), altas tasas de ausentismo (*no-shows*) y pérdida de tiempo productivo en la gestión telefónica.
 
 **Bookio** es una plataforma web SaaS (Software as a Service) multi-negocio diseñada para resolver esta problemática. Su arquitectura en la nube permite alta disponibilidad, garantizando un manejo robusto de concurrencia y aprovechando servicios administrados para tareas asíncronas.
 
-### 👥 Equipo y Distribución de Roles
+### Equipo y Distribución de Roles
 * **Alan Varela:** Backend feature 1 + Front end.
 * **Samuel Pia:** Backend feature 2 + Front end.
 * **Jair Aguilar:** Backend feature 3 + CI/CD.
 
 ---
 
-## 🏗️ Arquitectura en AWS
+## Arquitectura en AWS
 
 El proyecto está desplegado sobre una arquitectura en la nube con los siguientes servicios:
 
@@ -43,34 +43,6 @@ El proyecto está desplegado sobre una arquitectura en la nube con los siguiente
 | **SQS** | Cola de mensajes | `bookio-appointments-queue` — desacopla creación de citas del envío de correos |
 | **Secrets Manager** | Seguridad | Credenciales DB, Firebase y SMTP: el EC2 las lee vía `LabInstanceProfile` sin tocar el código |
 
-### Flujo de Notificaciones (SQS + Nodemailer)
-
-```
-Cliente                EC2 (Express)           SQS Queue            SQS Worker (EC2)         Gmail SMTP
-  │                        │                       │                       │                      │
-  │── POST /appointments ──▶│                       │                       │                      │
-  │                        │── INSERT DB ──────────▶DB                      │                      │
-  │                        │── SendMessage ────────▶│                       │                      │
-  │◀─── 201 Created ───────│                       │                       │                      │
-  │                        │                       │── ReceiveMessage ─────▶│                      │
-  │                        │                       │                       │── sendMail ──────────▶│
-  │                        │                       │                       │◀─── OK ───────────────│
-  │                        │                       │◀─ DeleteMessage ───────│                      │
-```
-
-> El **SQS Worker** corre dentro del mismo proceso Express (`src/workers/sqs.worker.ts`) usando **long polling** (20 s), lo que mantiene el costo de SQS en cero (free tier: 1 M requests/mes). Los correos se envían con **Nodemailer + Gmail SMTP** por el puerto 587 (abierto en EC2).
-
-### Gestión de Credenciales — Learner's Lab
-
-El mayor desafío del Learner's Lab es que las credenciales temporales **expiran cada ~4 horas**. La solución:
-
-| Contexto | Solución |
-|---|---|
-| **Local / scripts** | `bash scripts/update_credentials.sh` al inicio de cada sesión |
-| **EC2 en producción** | `LabInstanceProfile` inyecta credenciales automáticamente via instance metadata — **no rota, no expira en la instancia** |
-
-Esto significa que el backend puede quedarse corriendo 24/7 sin que importe que cambien las credenciales del Lab.
-
 ### Estimación de Costos (us-east-1)
 
 | Recurso | Precio/hr | 24h/7d |
@@ -81,24 +53,17 @@ Esto significa que el backend puede quedarse corriendo 24/7 sin que importe que 
 | S3, SQS, Nodemailer | — | ~$0.00 | 
 | **Total** | | **~$4.89/sem** | 
 
-> ```bash
-> bash scripts/stop_all.sh   # Detener al terminar de trabajar (~$0/hr)
-> bash scripts/start_all.sh  # Iniciar al empezar la sesión
-> ```
-> **Importante:** RDS solo puede estar detenida 7 días consecutivos. Después AWS la reinicia automáticamente.
 
 ### Diagramas Técnicos
 
-<details>
-<summary><b>☁️ Ver Diagrama de Arquitectura AWS</b></summary>
+<summary><b>Arquitectura</b></summary>
 <br>
-<p align="center">
-  <img src="https://i.imgur.com/59kCgQO.png" alt="Diagrama de Arquitectura AWS" width="800"/>
+<p align="left">
+  <img src="https://imgur.com/nBMCCuI.png" alt="Diagrama de Arquitectura AWS" width="800"/>
 </p>
-</details>
 
 <details>
-<summary><b>🔀 Ver Flujo de Secuencia (Disponibilidad y Reserva)</b></summary>
+<summary><b>Ver Flujo de Secuencia (Disponibilidad y Reserva)</b></summary>
 <br>
 <p align="center">
   <img src="https://imgur.com/GIikXmE.png" alt="Flujo de Disponibilidad y Reserva" width="800"/>
@@ -106,7 +71,7 @@ Esto significa que el backend puede quedarse corriendo 24/7 sin que importe que 
 </details>
 
 <details>
-<summary><b>🗄️ Ver Diagrama de Entidad Relación (Multi-tenant)</b></summary>
+<summary><b>Ver Diagrama de Entidad Relación (Multi-tenant)</b></summary>
 <br>
 <p align="center">
   <img src="https://imgur.com/KUaBgl9.png" alt="Diagrama de Entidad Relación Multi-tenant" width="800"/>
@@ -115,7 +80,7 @@ Esto significa que el backend puede quedarse corriendo 24/7 sin que importe que 
 
 ---
 
-## 🚀 Flujos End-to-End
+## Flujos End-to-End
 El desarrollo se centra en 3 flujos principales enumerados:
 
 1. **Flujo 1 - Configuración del Tenant:** Validación y creación del espacio del negocio (Business/Service) almacenando recursos en S3 y RDS.
@@ -123,8 +88,51 @@ El desarrollo se centra en 3 flujos principales enumerados:
 3. **Flujo 3 - Notificaciones por Eventos:** Al crear/cambiar estado de una cita, se publica un mensaje en **Amazon SQS**. Un worker de long-polling consume la cola y envía correos transaccionales (confirmación/cancelación) con **Nodemailer + Gmail SMTP**.
 
 ---
+### Estructura del Proyecto
 
-## ⚙️ Cómo correr el proyecto (Local)
+```text
+bookio-backend/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml               # Pipeline CI (Lint + Tests)
+│       └── cd.yml               # Pipeline CD (Build + Deploy)
+├── .husky/
+│   └── pre-commit               # Hook: lint-staged antes de cada commit
+├── docker-compose.yml           # Base de Datos Local
+├── .env.example                 # Ejemplo de variables de entorno
+├── api.http                     # Archivo de pruebas rápidas REST (VSCode REST Client)
+├── eslint.config.mjs            # Configuración de ESLint (TypeScript)
+├── jest.config.ts               # Configuración de Jest para pruebas unitarias
+├── prisma.config.ts             # Configuración del CLI de Prisma
+├── prisma/
+│   ├── schema.prisma            # Modelo de Base de Datos
+│   └── seed.ts                  # Script para poblar la DB inicial
+├── scripts/
+│   └── deploy.sh                # Script parametrizado de deploy a EC2
+├── tests/
+│   └── unit/                    # Pruebas unitarias por módulo
+│       ├── appointments/
+│       ├── isolation/           # Tests de aislamiento multi-tenant
+│       ├── middlewares/
+│       ├── schedules/
+│       └── services/
+└── src/
+    ├── app/
+    │   ├── appointments/        # Lógica de Reservaciones
+    │   ├── auth/                # Rutas y validaciones de Firebase
+    │   ├── businesses/          # Puntos de entrada para el local / negocio
+    │   ├── favorites/           # Gestión de favoritos del cliente
+    │   ├── middlewares/         # Jwt, RequireRole, S3, SNS, SecretManager
+    │   ├── reviews/             # Opiniones de citas pasadas
+    │   ├── schedules/           # Horarios laborables
+    │   ├── services/            # Catálogo de servicios por negocio
+    │   └── users/               # Perfil y metadatos de usuario
+    ├── config/                  # Inyección de environment (.env)
+    ├── database/                # Conexión Adapter Pg de Prisma
+    └── index.ts                 # Entry point (Express)
+```
+
+## Cómo correr el proyecto (Local)
 
 ### Prerrequisitos
 * Node.js v20+
@@ -175,49 +183,6 @@ bash scripts/cleanup_aws.sh
 
 > **Nota Gmail App Password:** Ve a [myaccount.google.com](https://myaccount.google.com) → Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones. Genera una de 16 caracteres.
 
-### 📁 Estructura del Proyecto
-
-```text
-bookio-backend/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml               # Pipeline CI (Lint + Tests)
-│       └── cd.yml               # Pipeline CD (Build + Deploy)
-├── .husky/
-│   └── pre-commit               # Hook: lint-staged antes de cada commit
-├── docker-compose.yml           # Base de Datos Local
-├── .env.example                 # Ejemplo de variables de entorno
-├── api.http                     # Archivo de pruebas rápidas REST (VSCode REST Client)
-├── eslint.config.mjs            # Configuración de ESLint (TypeScript)
-├── jest.config.ts               # Configuración de Jest para pruebas unitarias
-├── prisma.config.ts             # Configuración del CLI de Prisma
-├── prisma/
-│   ├── schema.prisma            # Modelo de Base de Datos
-│   └── seed.ts                  # Script para poblar la DB inicial
-├── scripts/
-│   └── deploy.sh                # Script parametrizado de deploy a EC2
-├── tests/
-│   └── unit/                    # Pruebas unitarias por módulo
-│       ├── appointments/
-│       ├── isolation/           # Tests de aislamiento multi-tenant
-│       ├── middlewares/
-│       ├── schedules/
-│       └── services/
-└── src/
-    ├── app/
-    │   ├── appointments/        # Lógica de Reservaciones
-    │   ├── auth/                # Rutas y validaciones de Firebase
-    │   ├── businesses/          # Puntos de entrada para el local / negocio
-    │   ├── favorites/           # Gestión de favoritos del cliente
-    │   ├── middlewares/         # Jwt, RequireRole, S3, SNS, SecretManager
-    │   ├── reviews/             # Opiniones de citas pasadas
-    │   ├── schedules/           # Horarios laborables
-    │   ├── services/            # Catálogo de servicios por negocio
-    │   └── users/               # Perfil y metadatos de usuario
-    ├── config/                  # Inyección de environment (.env)
-    ├── database/                # Conexión Adapter Pg de Prisma
-    └── index.ts                 # Entry point (Express)
-```
 
 ---
 
@@ -321,7 +286,7 @@ El proyecto cuenta con un set de middlewares especializados para inyectar lógic
 
 ---
 
-## 🧪 Pruebas Unitarias
+## Pruebas Unitarias
 
 El proyecto utiliza **Jest** + **ts-jest** para pruebas unitarias. Los tests se organizan en la carpeta `tests/` reflejando la estructura del código fuente:
 
@@ -362,7 +327,7 @@ npx jest tests/unit/services/services.service.test.ts
 
 ---
 
-## 🔄 Estrategia de CI/CD
+## Estrategia de CI/CD
 
 Nuestra estrategia de Integración y Despliegue Continuo se basa en automatizar la calidad del código para evitar que errores humanos lleguen a producción.
 

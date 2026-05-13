@@ -90,7 +90,7 @@ aws cloudwatch put-metric-alarm \
   --region "$REGION"
 log "Alarma creada: $ALARM_RDS_CPU (CPU RDS > 80% por 10 min)"
 
-# ─── Dashboard: 5 métricas en un solo panel ───────────────────────────────────
+# ─── Dashboard completo: infra + API + negocio ────────────────────────────────
 header "Dashboard — $DASHBOARD_NAME"
 
 DASHBOARD_BODY=$(cat <<DASHBOARD
@@ -99,110 +99,85 @@ DASHBOARD_BODY=$(cat <<DASHBOARD
     {
       "type": "text",
       "x": 0, "y": 0, "width": 24, "height": 1,
-      "properties": {
-        "markdown": "# Bookio — Production Monitoring"
-      }
+      "properties": { "markdown": "# Bookio — Production Monitoring" }
     },
     {
       "type": "metric",
-      "x": 0, "y": 1, "width": 12, "height": 6,
+      "x": 0, "y": 1, "width": 8, "height": 6,
       "properties": {
-        "title": "EC2 — CPU Utilization (%)",
-        "view": "timeSeries",
-        "stat": "Average",
-        "period": 60,
-        "region": "${REGION}",
-        "metrics": [
-          ["AWS/EC2", "CPUUtilization",
-           "InstanceId", "${EC2_INSTANCE_ID}",
-           {"label": "CPU EC2", "color": "#2ca02c"}]
-        ],
-        "annotations": {
-          "horizontal": [{"value": 80, "label": "Limite alarma", "color": "#d62728"}]
-        },
+        "title": "EC2 — CPU (%)", "view": "timeSeries", "stat": "Average", "period": 60, "region": "${REGION}",
+        "metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", "${EC2_INSTANCE_ID}", {"label":"CPU EC2","color":"#2ca02c"}]],
+        "annotations": {"horizontal": [{"value": 80, "label": "Alarma", "color": "#d62728"}]},
         "yAxis": {"left": {"min": 0, "max": 100}}
       }
     },
     {
       "type": "metric",
-      "x": 12, "y": 1, "width": 12, "height": 6,
+      "x": 8, "y": 1, "width": 8, "height": 6,
       "properties": {
-        "title": "EC2 — Network In (bytes)",
-        "view": "timeSeries",
-        "stat": "Sum",
-        "period": 60,
-        "region": "${REGION}",
-        "annotations": {"horizontal": []},
-        "metrics": [
-          ["AWS/EC2", "NetworkIn",
-           "InstanceId", "${EC2_INSTANCE_ID}",
-           {"label": "Network In", "color": "#1f77b4"}]
-        ]
-      }
-    },
-    {
-      "type": "metric",
-      "x": 0, "y": 7, "width": 12, "height": 6,
-      "properties": {
-        "title": "RDS — CPU Utilization (%)",
-        "view": "timeSeries",
-        "stat": "Average",
-        "period": 60,
-        "region": "${REGION}",
-        "metrics": [
-          ["AWS/RDS", "CPUUtilization",
-           "DBInstanceIdentifier", "${RDS_IDENTIFIER}",
-           {"label": "CPU RDS", "color": "#ff7f0e"}]
-        ],
-        "annotations": {
-          "horizontal": [{"value": 80, "label": "Limite alarma", "color": "#d62728"}]
-        },
+        "title": "RDS — CPU (%)", "view": "timeSeries", "stat": "Average", "period": 60, "region": "${REGION}",
+        "metrics": [["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${RDS_IDENTIFIER}", {"label":"CPU RDS","color":"#ff7f0e"}]],
+        "annotations": {"horizontal": [{"value": 80, "label": "Alarma", "color": "#d62728"}]},
         "yAxis": {"left": {"min": 0, "max": 100}}
       }
     },
     {
       "type": "metric",
-      "x": 12, "y": 7, "width": 12, "height": 6,
+      "x": 16, "y": 1, "width": 8, "height": 6,
       "properties": {
-        "title": "RDS — Database Connections",
-        "view": "timeSeries",
-        "stat": "Average",
-        "period": 60,
-        "region": "${REGION}",
-        "annotations": {"horizontal": []},
+        "title": "RDS — Conexiones", "view": "timeSeries", "stat": "Average", "period": 60, "region": "${REGION}",
+        "metrics": [["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${RDS_IDENTIFIER}", {"label":"Conexiones","color":"#9467bd"}]]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 0, "y": 7, "width": 8, "height": 6,
+      "properties": {
+        "title": "API — Requests por minuto", "view": "timeSeries", "stat": "Sum", "period": 60, "region": "${REGION}",
+        "metrics": [["Bookio/API", "RequestCount", {"label":"Requests","color":"#1f77b4"}]]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 8, "y": 7, "width": 8, "height": 6,
+      "properties": {
+        "title": "API — Latencia promedio (ms)", "view": "timeSeries", "stat": "Average", "period": 60, "region": "${REGION}",
+        "metrics": [["Bookio/API", "ResponseTime", {"label":"Latencia","color":"#17becf"}]]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16, "y": 7, "width": 8, "height": 6,
+      "properties": {
+        "title": "API — Errores", "view": "timeSeries", "stat": "Sum", "period": 60, "region": "${REGION}",
         "metrics": [
-          ["AWS/RDS", "DatabaseConnections",
-           "DBInstanceIdentifier", "${RDS_IDENTIFIER}",
-           {"label": "Conexiones activas", "color": "#9467bd"}]
+          ["Bookio/API", "Error4xx", {"label":"4xx","color":"#ff7f0e"}],
+          ["Bookio/API", "Error5xx", {"label":"5xx","color":"#d62728"}]
         ]
       }
     },
     {
       "type": "metric",
-      "x": 0, "y": 13, "width": 12, "height": 6,
+      "x": 0, "y": 13, "width": 8, "height": 6,
       "properties": {
-        "title": "SQS — Mensajes enviados a la cola",
-        "view": "timeSeries",
-        "stat": "Sum",
-        "period": 300,
-        "region": "${REGION}",
-        "annotations": {"horizontal": []},
-        "metrics": [
-          ["AWS/SQS", "NumberOfMessagesSent",
-           "QueueName", "${SQS_QUEUE_NAME}",
-           {"label": "Citas encoladas", "color": "#8c564b"}]
-        ]
+        "title": "Negocio — Citas creadas", "view": "timeSeries", "stat": "Sum", "period": 3600, "region": "${REGION}",
+        "metrics": [["Bookio/Business", "AppointmentsCreated", {"label":"Citas","color":"#2ca02c"}]]
       }
     },
     {
-      "type": "alarm",
-      "x": 12, "y": 13, "width": 12, "height": 6,
+      "type": "metric",
+      "x": 8, "y": 13, "width": 8, "height": 6,
       "properties": {
-        "title": "Estado de Alarmas",
-        "alarms": [
-          "arn:aws:cloudwatch:${REGION}:${ACCOUNT_ID}:alarm:${ALARM_EC2_CPU}",
-          "arn:aws:cloudwatch:${REGION}:${ACCOUNT_ID}:alarm:${ALARM_RDS_CPU}"
-        ]
+        "title": "Negocio — Usuarios registrados", "view": "timeSeries", "stat": "Sum", "period": 3600, "region": "${REGION}",
+        "metrics": [["Bookio/Business", "UsersRegistered", {"label":"Usuarios","color":"#8c564b"}]]
+      }
+    },
+    {
+      "type": "metric",
+      "x": 16, "y": 13, "width": 8, "height": 6,
+      "properties": {
+        "title": "SQS — Mensajes encolados", "view": "timeSeries", "stat": "Sum", "period": 300, "region": "${REGION}",
+        "metrics": [["AWS/SQS", "NumberOfMessagesSent", "QueueName", "${SQS_QUEUE_NAME}", {"label":"Citas en cola","color":"#e377c2"}]]
       }
     }
   ]
