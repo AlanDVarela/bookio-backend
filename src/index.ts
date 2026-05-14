@@ -17,7 +17,7 @@ app.use(cors({
     "http://bookio-static-website.s3-website-us-east-1.amazonaws.com",
     "https://bookio-static-website.s3.us-east-1.amazonaws.com",
   ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "PATCH","DELETE"],
   credentials: true,
 }));
 
