@@ -15,6 +15,7 @@ jest.mock('../../../src/database/prisma', () => ({
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       delete: jest.fn(),
     },
     blockedSlot: {
@@ -79,11 +80,11 @@ describe('AppointmentsService', () => {
         end_time: '10:00',
       });
 
-      // Cita de 09:00 a 09:30
+      // Cita de 09:00 a 09:30 CDMX = 15:00 a 15:30 UTC (CDMX_OFFSET = 6)
       const apptStart = new Date(FUTURE_DATE);
-      apptStart.setUTCHours(9, 0, 0, 0);
+      apptStart.setUTCHours(15, 0, 0, 0);
       const apptEnd = new Date(FUTURE_DATE);
-      apptEnd.setUTCHours(9, 30, 0, 0);
+      apptEnd.setUTCHours(15, 30, 0, 0);
 
       (mockedPrisma.appointment.findMany as jest.Mock).mockResolvedValue([
         { start_datetime: apptStart, end_datetime: apptEnd, status: 'CONFIRMED' },

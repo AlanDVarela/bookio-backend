@@ -45,11 +45,14 @@ export class AppointmentsService {
       // Si el servicio no tiene entradas, hereda el horario completo del negocio
     }
 
+    // CDMX = UTC-6: midnight CDMX = 06:00 UTC, next midnight = 30:00 UTC (rolls to next day 06:00)
+    const CDMX_OFFSET = 6;
+
     const startOfDay = new Date(targetDate);
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    startOfDay.setUTCHours(CDMX_OFFSET, 0, 0, 0);
 
     const endOfDay = new Date(targetDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    endOfDay.setUTCHours(CDMX_OFFSET + 24, 0, 0, 0);
 
     const [appointments, blockedSlots] = await Promise.all([
       prisma.appointment.findMany({
@@ -73,10 +76,10 @@ export class AppointmentsService {
     const [endHour, endMinute]     = effectiveEnd.split(':').map(Number);
 
     let currentSlotTime = new Date(targetDate);
-    currentSlotTime.setUTCHours(startHour, startMinute, 0, 0);
+    currentSlotTime.setUTCHours(startHour + CDMX_OFFSET, startMinute, 0, 0);
 
     const endWorkingTime = new Date(targetDate);
-    endWorkingTime.setUTCHours(endHour, endMinute, 0, 0);
+    endWorkingTime.setUTCHours(endHour + CDMX_OFFSET, endMinute, 0, 0);
 
     const now = new Date();
 
@@ -92,7 +95,8 @@ export class AppointmentsService {
       }
 
       const isOverlapping = appointments.some((appt) => (
-        currentSlotTime < appt.end_datetime && slotEnd > appt.start_datetime
+        currentSlotTime.getTime() < new Date(appt.end_datetime).getTime() &&
+        slotEnd.getTime() > new Date(appt.start_datetime).getTime()
       ));
 
       // Verificar bloqueos parciales de horario
@@ -101,15 +105,16 @@ export class AppointmentsService {
         const [bsh, bsm] = b.start_time.split(':').map(Number);
         const [beh, bem] = b.end_time.split(':').map(Number);
         const blockStart = new Date(targetDate);
-        blockStart.setUTCHours(bsh, bsm, 0, 0);
+        blockStart.setUTCHours(bsh + CDMX_OFFSET, bsm, 0, 0);
         const blockEnd = new Date(targetDate);
-        blockEnd.setUTCHours(beh, bem, 0, 0);
+        blockEnd.setUTCHours(beh + CDMX_OFFSET, bem, 0, 0);
         return currentSlotTime < blockEnd && slotEnd > blockStart;
       });
 
       if (!isOverlapping && !isBlocked) {
+        const localH = currentSlotTime.getUTCHours() - CDMX_OFFSET;
         availableSlots.push(
-          `${currentSlotTime.getUTCHours().toString().padStart(2, '0')}:${currentSlotTime.getUTCMinutes().toString().padStart(2, '0')}`
+          `${localH.toString().padStart(2, '0')}:${currentSlotTime.getUTCMinutes().toString().padStart(2, '0')}`
         );
       }
       currentSlotTime = new Date(currentSlotTime.getTime() + serviceDurationMinutes * 60000);
