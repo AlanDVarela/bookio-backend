@@ -250,7 +250,7 @@ export class AppointmentsService {
     const now = new Date();
     await prisma.appointment.updateMany({
       where: {
-        status: 'IN_PROGRESS',
+        status: { in: ['IN_PROGRESS', 'CONFIRMED'] },
         end_datetime: { lt: now }
       },
       data: { status: 'COMPLETED' }

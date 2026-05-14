@@ -56,6 +56,38 @@ export class ReviewsController {
     }
   }
 
+  public async getMyReviews(req: AuthenticatedRequest, res: Response) {
+    try {
+      const clientId = req.user?.id;
+      const reviews = await prisma.review.findMany({
+        where: { client_id: clientId },
+        include: {
+          business: { select: { id: true, name: true, logo_url: true } },
+          appointment: { select: { start_datetime: true, service: { select: { name: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return res.status(200).json({ reviews });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  public async getReviewByAppointment(req: AuthenticatedRequest, res: Response) {
+    try {
+      const clientId = req.user?.id;
+      const appointmentId = req.params.appointmentId as string;
+      const review = await prisma.review.findFirst({
+        where: { appointment_id: appointmentId, client_id: clientId },
+      });
+      return res.status(200).json({ review: review ?? null });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
   public async getBusinessReviews(req: Request, res: Response) {
     try {
       const businessId = req.params.businessId as string;
