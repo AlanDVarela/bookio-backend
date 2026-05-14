@@ -148,7 +148,7 @@ export class AppointmentsController {
   // Obtener cita por ID
   public async getById(req: Request, res: Response) {
     try {
-      const { id } = req.params;
+      const id = req.params.id as string;
       const appointment = await appointmentsService.findById(id);
 
       if (!appointment) {
