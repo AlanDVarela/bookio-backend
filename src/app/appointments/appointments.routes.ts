@@ -25,6 +25,7 @@ router.post(
   appointmentsController.bookManualAppointment
 );
 
+router.get('/:id', authenticateJWT, appointmentsController.getById);
 router.put('/:id/status', authenticateJWT, appointmentsController.updateStatus);
 router.delete('/:id', authenticateJWT, appointmentsController.deleteAppointment);
 

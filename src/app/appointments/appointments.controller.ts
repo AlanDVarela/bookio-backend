@@ -145,7 +145,24 @@ export class AppointmentsController {
     }
   }
 
-  // Actualizar cita 
+  // Obtener cita por ID
+  public async getById(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const appointment = await appointmentsService.findById(id);
+
+      if (!appointment) {
+        return res.status(404).json({ error: 'Appointment not found' });
+      }
+
+      return res.status(200).json({ appointment });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  // Actualizar cita
   public async updateStatus(req: Request, res: Response) {
     try {
       const id = req.params.id as string;
