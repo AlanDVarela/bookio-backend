@@ -274,6 +274,17 @@ export class AppointmentsService {
     });
   }
 
+  public async findById(id: string) {
+    return prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        client: { select: { id: true, name: true, email: true } },
+        service: true,
+        business: true,
+      },
+    });
+  }
+
   public async updateAppointmentStatus(id: string, status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'IN_PROGRESS' | 'COMPLETED') {
     const appointment = await prisma.appointment.update({
       where: { id },
