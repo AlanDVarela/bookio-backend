@@ -16,6 +16,7 @@ app.use(cors({
     "http://localhost:5000",
     "http://bookio-static-website.s3-website-us-east-1.amazonaws.com",
     "https://bookio-static-website.s3.us-east-1.amazonaws.com",
+    "https://bookio-frontend.vercel.app/"
   ],
   methods: ["GET", "POST", "PUT", "PATCH","DELETE"],
   credentials: true,
