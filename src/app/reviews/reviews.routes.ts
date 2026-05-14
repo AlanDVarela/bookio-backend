@@ -6,6 +6,8 @@ const router = Router();
 const controller = new ReviewsController();
 
 router.post('/', authenticateJWT, requireRole('CLIENT'), controller.createReview);
+router.get('/mine', authenticateJWT, requireRole('CLIENT'), controller.getMyReviews);
+router.get('/appointment/:appointmentId', authenticateJWT, requireRole('CLIENT'), controller.getReviewByAppointment);
 router.put('/:id', authenticateJWT, requireRole('CLIENT'), controller.updateReview);
 router.delete('/:id', authenticateJWT, requireRole('CLIENT'), controller.deleteReview);
 router.get('/business/:businessId', controller.getBusinessReviews);
