@@ -5,10 +5,9 @@ import { authenticateJWT, requireRole } from '../middlewares/auth.middleware';
 const router = Router();
 const controller = new ReviewsController();
 
-// crear review
 router.post('/', authenticateJWT, requireRole('CLIENT'), controller.createReview);
-
-// obtener reviews
+router.put('/:id', authenticateJWT, requireRole('CLIENT'), controller.updateReview);
+router.delete('/:id', authenticateJWT, requireRole('CLIENT'), controller.deleteReview);
 router.get('/business/:businessId', controller.getBusinessReviews);
 
 export default router;

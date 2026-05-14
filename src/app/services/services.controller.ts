@@ -133,6 +133,24 @@ export class ServicesController {
     }
   }
 
+  public async deleteService(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const ownerId = req.user?.id;
+
+      const service = await servicesService.getServiceById(id);
+      if (!service || service.business.owner_id !== ownerId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      await prisma.service.delete({ where: { id } });
+      return res.status(200).json({ message: 'Service deleted successfully' });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
   public async updateService(req: AuthenticatedRequest, res: Response) {
     try {
       const id = req.params.id as string;
