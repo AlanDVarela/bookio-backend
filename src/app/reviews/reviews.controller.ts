@@ -60,12 +60,54 @@ export class ReviewsController {
     try {
       const businessId = req.params.businessId as string;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-      
+
       const reviews = await reviewsService.getReviewsByBusiness(businessId, limit);
       return res.status(200).json({ reviews });
     } catch (error) {
       console.error(error);
       return res.status(500).json({ error: 'Internal Server Error fetching reviews' });
+    }
+  }
+
+  public async updateReview(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const clientId = req.user?.id;
+      const { score, comment } = req.body;
+
+      const review = await prisma.review.findUnique({ where: { id } });
+      if (!review) return res.status(404).json({ error: 'Review not found' });
+      if (review.client_id !== clientId) return res.status(403).json({ error: 'Forbidden' });
+
+      const updated = await prisma.review.update({
+        where: { id },
+        data: {
+          ...(score !== undefined && { score: parseInt(score) }),
+          ...(comment !== undefined && { comment }),
+        },
+      });
+
+      return res.status(200).json({ message: 'Review updated successfully', review: updated });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  public async deleteReview(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const clientId = req.user?.id;
+
+      const review = await prisma.review.findUnique({ where: { id } });
+      if (!review) return res.status(404).json({ error: 'Review not found' });
+      if (review.client_id !== clientId) return res.status(403).json({ error: 'Forbidden' });
+
+      await prisma.review.delete({ where: { id } });
+      return res.status(200).json({ message: 'Review deleted successfully' });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
 }

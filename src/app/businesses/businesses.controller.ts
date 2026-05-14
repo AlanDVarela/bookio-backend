@@ -282,14 +282,13 @@ export class BusinessesController {
       }
 
       const { uploadBusinessPhoto } = require('../middlewares/s3.service');
-      
+
       const photoUrls: string[] = [];
       for (const file of req.files) {
         const url = await uploadBusinessPhoto(file.buffer, file.mimetype);
         photoUrls.push(url);
       }
 
-      const { prisma } = require('../../database/prisma');
       const updated = await prisma.business.update({
         where: { id },
         data: {
@@ -313,7 +312,7 @@ export class BusinessesController {
         return res.status(404).json({ error: 'Business not found' });
       }
 
-      const { name, type, address, phone, latitude, longitude } = req.body;
+      const { name, type, address, phone, latitude, longitude, photos } = req.body;
 
       if (phone !== undefined) {
         await prisma.user.update({
@@ -328,6 +327,7 @@ export class BusinessesController {
         address,
         latitude: latitude ? parseFloat(latitude) : undefined,
         longitude: longitude ? parseFloat(longitude) : undefined,
+        photos: photos !== undefined ? photos : undefined,
       });
 
       return res.status(200).json({
@@ -375,18 +375,17 @@ export class BusinessesController {
       }
 
       const { uploadBusinessPhoto } = require('../middlewares/s3.service');
-      
+
       const photoUrls: string[] = [];
       for (const file of req.files) {
         const url = await uploadBusinessPhoto(file.buffer, file.mimetype);
         photoUrls.push(url);
       }
 
-      // Replace the entire array
       const updated = await prisma.business.update({
         where: { id: business.id },
         data: {
-          photos: photoUrls
+          photos: { push: photoUrls }
         }
       });
 
@@ -394,6 +393,20 @@ export class BusinessesController {
     } catch (error) {
       console.error(error);
       return res.status(500).json({ error: 'Internal Server Error updating photos' });
+    }
+  }
+
+  public async deleteMine(req: AuthenticatedRequest, res: Response) {
+    try {
+      const ownerId = req.user?.id;
+      const business = await prisma.business.findFirst({ where: { owner_id: ownerId } });
+      if (!business) return res.status(404).json({ error: 'Business not found' });
+
+      await prisma.business.delete({ where: { id: business.id } });
+      return res.status(200).json({ message: 'Business deleted successfully' });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
 }

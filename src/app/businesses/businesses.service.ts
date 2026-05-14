@@ -130,6 +130,7 @@ export class BusinessesService {
     address?: string;
     latitude?: number;
     longitude?: number;
+    photos?: string[];
   }) {
     return prisma.business.update({
       where: { id },
@@ -139,6 +140,7 @@ export class BusinessesService {
         address: data.address,
         latitude: data.latitude,
         longitude: data.longitude,
+        photos: data.photos,
       },
     });
   }
