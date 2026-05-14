@@ -10,3 +10,4 @@ bookio_data.sql
 keys/
 scripts/.aws_resources
 keys/
+.claude
